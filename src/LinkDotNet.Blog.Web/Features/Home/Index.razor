@@ -1,11 +1,11 @@
 ﻿@page "/"
 @page "/{page:int}"
-@using Markdig
 @using LinkDotNet.Blog.Domain
 @using LinkDotNet.Blog.Infrastructure
 @using LinkDotNet.Blog.Infrastructure.Persistence
 @using LinkDotNet.Blog.Web.Features.Home.Components
 @using LinkDotNet.Blog.Web.Features.Services
+@using Markdig
 @using Microsoft.Extensions.Caching.Memory
 @using Microsoft.Extensions.Primitives
 @inject IMemoryCache MemoryCache
@@ -20,65 +20,66 @@
 <OgData Title="@(Markdown.ToPlainText(AppConfiguration.Value.BlogName))"
         AbsolutePreviewImageUrl="@ImageUrl"
         Description="@(Markdown.ToPlainText(Introduction.Value.Description))"></OgData>
-<section>
-    <IntroductionCard></IntroductionCard>
+<section class="stroked">
+	<IntroductionCard></IntroductionCard>
 </section>
 
-<section>
-    <header>
-        <div class="text-center pt-2">
-            <h1 class="m-auto align-middle pt-4 pb-3 fw-bold">@(currentPage.IsFirstPage ? "Recent Posts" : "Older Posts")</h1>
-        </div>
-    </header>
-    <div class="content px-4 my-2">
-    @for (var i = 0; i < currentPage.Count; i++)
-    {
-        <ShortBlogPost BlogPost="currentPage[i]" UseAlternativeStyle="@(i % 2 != 0)" LazyLoadPreviewImage="i > 2"></ShortBlogPost>
-    }
-    </div>
-    <BlogPostNavigation PageList="@currentPage"></BlogPostNavigation>
+<section class="stroked-odd">
+	<header>
+		<div class="text-center pt-2">
+			<h1 class="m-auto align-middle pt-4 pb-3 fw-bold">@(currentPage.IsFirstPage ? "Recent Posts" : "Older Posts")</h1>
+		</div>
+	</header>
+	<div class="content px-4 my-2">
+		@for (var i = 0; i < currentPage.Count; i++)
+		{
+			<ShortBlogPost BlogPost="currentPage[i]" UseAlternativeStyle="@(i % 2 != 0)"
+			               LazyLoadPreviewImage="i > 2"></ShortBlogPost>
+		}
+	</div>
+	<BlogPostNavigation PageList="@currentPage"></BlogPostNavigation>
 </section>
 
 @code {
-    [Parameter]
-    public int? Page { get; set; }
+	[Parameter] public int? Page { get; set; }
 
-    private IPagedList<BlogPost> currentPage = PagedList<BlogPost>.Empty;
+	private IPagedList<BlogPost> currentPage = PagedList<BlogPost>.Empty;
 
-    private string ImageUrl => Introduction.Value.ProfilePictureUrl.ToAbsoluteUrl(NavigationManager.BaseUri);
+	private string ImageUrl => Introduction.Value.ProfilePictureUrl.ToAbsoluteUrl(NavigationManager.BaseUri);
 
-    protected override async Task OnParametersSetAsync()
-    {
-	    const string firstPageCacheKey = "BlogPostList";
-        if (Page is null or < 1)
-        {
-            Page = 1;
-        }
+	protected override async Task OnParametersSetAsync()
+	{
+		const string firstPageCacheKey = "BlogPostList";
+		if (Page is null or < 1)
+		{
+			Page = 1;
+		}
 
-	    // The hot path is that users land on the initial page which is the first page.
-	    // So we want to cache that page for a while to reduce the load on the database
-	    // and to speed up the page load.
+		// The hot path is that users land on the initial page which is the first page.
+		// So we want to cache that page for a while to reduce the load on the database
+		// and to speed up the page load.
 		// That will lead to stale blog posts for x minutes (worst case) for the first page,
 		// but I am fine with that (as publishing isn't super critical and not done multiple times per hour).
 		// This cache can be manually invalidated in the Admin UI (settings)
-	    if (Page == 1)
-	    {
-		    currentPage = (await MemoryCache.GetOrCreateAsync(firstPageCacheKey, async entry =>
-		    {
-			    var cacheDuration = TimeSpan.FromMinutes(AppConfiguration.Value.FirstPageCacheDurationInMinutes);
-			    entry.AbsoluteExpirationRelativeToNow = cacheDuration;
-			    entry.AddExpirationToken(new CancellationChangeToken(CacheTokenProvider.Token));
-			    return await GetAllForPageAsync(1);
-		    }))!;
-		    return;
-	    }
+		if (Page == 1)
+		{
+			currentPage = (await MemoryCache.GetOrCreateAsync(firstPageCacheKey, async entry =>
+			{
+				var cacheDuration = TimeSpan.FromMinutes(AppConfiguration.Value.FirstPageCacheDurationInMinutes);
+				entry.AbsoluteExpirationRelativeToNow = cacheDuration;
+				entry.AddExpirationToken(new CancellationChangeToken(CacheTokenProvider.Token));
+				return await GetAllForPageAsync(1);
+			}))!;
+			return;
+		}
 
-        currentPage = await GetAllForPageAsync(Page.Value);
-    }
+		currentPage = await GetAllForPageAsync(Page.Value);
+	}
 
 	private ValueTask<IPagedList<BlogPost>> GetAllForPageAsync(int page)
 		=> BlogPostRepository.GetAllAsync(
-		p => p.IsPublished,
-		b => b.UpdatedDate,
-		page: page, pageSize: AppConfiguration.Value.BlogPostsPerPage);
+			p => p.IsPublished,
+			b => b.UpdatedDate,
+			page: page, pageSize: AppConfiguration.Value.BlogPostsPerPage);
+
 }

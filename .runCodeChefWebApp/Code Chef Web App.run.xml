@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Code Chef Web App" type="AzureWebAppDeploy">
+    <option name="appServicePlanName" value="codechef" />
+    <option name="appServicePlanResourceGroupName" value="blog" />
+    <option name="operatingSystem" value="Linux" />
+    <option name="pricingSize" value="B1" />
+    <option name="pricingTier" value="Basic" />
+    <option name="projectConfiguration" value="Release" />
+    <option name="projectPlatform" value="Any CPU" />
+    <option name="publishableProjectPath" value="$PROJECT_DIR$/src/LinkDotNet.Blog.Web/LinkDotNet.Blog.Web.csproj" />
+    <option name="region" value="westeurope" />
+    <option name="resourceGroupName" value="blog" />
+    <option name="subscriptionId" value="5d390e2c-41b3-489d-81aa-f4f09fb29fe8" />
+    <option name="webAppName" value="codechef" />
+    <method v="2" />
+  </configuration>
+</component>

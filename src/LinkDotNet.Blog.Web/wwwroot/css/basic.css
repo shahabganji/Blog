@@ -1,4 +1,30 @@
-﻿:root, html[data-bs-theme='light'] {
+﻿
+:root, html {
+	/* Fonts */
+	--default-font: 'Calibri';
+	--code-font: 'Lucida Console', 'Courier New';
+	--gradient-start: #005061;
+	--gradient-end: #E8C700;
+
+	/* Color definitions */
+	--wild-sand: #f4f4f4;
+	--silver: #dadada;
+	--waterloo: rgba(140, 140, 162, 0.25);
+
+	/* Usages */
+	--background: var(--wild-sand);
+	--tag-background: var(--waterloo);
+
+	--background-gradient-start: var(--wild-sand);
+	--background-gradient-end: var(--silver);
+
+	/* Override some Bootstrap defaults */
+	--bs-body-font-weight: 300;
+	--bs-nav-link-font-weight: 300;
+}
+
+
+:root, html[data-bs-theme='light'] {
     /* Fonts */
     --default-font: 'Calibri';
     --code-font: 'Lucida Console', 'Courier New';
@@ -39,70 +65,70 @@ html[data-bs-theme='dark'] {
 }
 
 html {
-    height: 100%;
+	height: 100%;
 }
 
 html:focus-within {
-    scroll-behavior: smooth;
+	scroll-behavior: smooth;
 }
 
 body {
-    margin: 0;
-    background-image: linear-gradient(to bottom, var(--background-gradient-start) 20%, var(--background-gradient-end));
-    background-repeat: no-repeat;
-    background-attachment: fixed;
-    font-family: var(--default-font), sans-serif !important;
-    min-height: 100vh;
-    text-rendering: optimizeSpeed;
+	margin: 0;
+	background-image: linear-gradient(to bottom, var(--background-gradient-start) 20%, var(--background-gradient-end));
+	background-repeat: no-repeat;
+	background-attachment: fixed;
+	font-family: var(--default-font), sans-serif !important;
+	min-height: 100vh;
+	text-rendering: optimizeSpeed;
 }
 
 a {
-    transition: 0.3s ease-in-out !important;
-    font-weight: 500;
+	transition: 0.3s ease-in-out !important;
+	font-weight: 500;
 }
 
 .disabled a {
-    font-weight: 400;
+	font-weight: 400;
 }
 
 h1 {
-    word-wrap: break-word;
+	word-wrap: break-word;
 }
 
 blockquote {
-    padding-left: 0.5em;
+	padding-left: 0.5em;
 }
 
 blockquote::before {
-    content: open-quote;
-    vertical-align: -0.4em;
-    line-height: 0.1em;
-    font-size: 2.5em;
+	content: open-quote;
+	vertical-align: -0.4em;
+	line-height: 0.1em;
+	font-size: 2.5em;
 }
 
 blockquote::after {
-    content: close-quote;
-    vertical-align: -0.4em;
-    line-height: 0.1em;
-    font-size: 2.5em;
+	content: close-quote;
+	vertical-align: -0.4em;
+	line-height: 0.1em;
+	font-size: 2.5em;
 }
 
 blockquote p {
-    display: inline;
+	display: inline;
 }
 
 section {
-    padding-bottom: 10px;
+	padding-bottom: 10px;
 }
 
 code {
-    font-family: var(--code-font), cursive;
+	font-family: var(--code-font), cursive;
 }
 
 .date:before {
-    font-family: 'icons';
-    font-weight: 900;
-    content: "\e953";
+	font-family: 'icons';
+	font-weight: 900;
+	content: "\e953";
 }
 
 .theme-toggle:before {
@@ -132,17 +158,60 @@ code {
 	}
 }
 
+
+.stroked {
+	position: relative;
+	z-index: 0;
+}
+
+.stroked::before {
+	content: "";
+	position: absolute;
+	top: 90%;
+	right: 0;
+	height: 160px;
+	bottom: 0;
+	left: 0;
+	width: 100vw;
+	/*margin-left:  calc(-50vw + 50%);*/
+	background: linear-gradient(82deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+	box-sizing: border-box;
+	z-index: -1;
+	transform: skewY(-7deg);
+}
+
+.stroked-odd {
+	position: relative;
+	z-index: 0;
+}
+
+.stroked-odd::before {
+	content: "";
+	position: absolute;
+	top: 90%;
+	right: 0;
+	height: 160px;
+	bottom: 0;
+	left: 0;
+	width: 100vw;
+	background: linear-gradient(82deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+	box-sizing: border-box;
+	z-index: -1;
+	transform: skewY(7deg);
+}
+
+
 /* Template defined css */
 .valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+	outline: 1px solid #26b050;
 }
 
 .invalid {
-    outline: 1px solid red;
+	outline: 1px solid red;
 }
 
 .validation-message {
-    color: red;
+	color: red;
 }
 
 /* Fixes white background/white icon for markdown editors */
@@ -151,24 +220,24 @@ code {
 }
 
 .editor-toolbar button.active, .editor-toolbar button:hover {
-    background: rgb(36, 90, 170) !important;
+	background: rgb(36, 90, 170) !important;
 }
 
 #blazor-error-ui {
-    background: lightyellow;
-    bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
-    display: none;
-    left: 0;
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
-    position: fixed;
-    width: 100%;
-    z-index: 1000;
+	background: lightyellow;
+	bottom: 0;
+	box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+	display: none;
+	left: 0;
+	padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+	position: fixed;
+	width: 100%;
+	z-index: 1000;
 }
 
 #blazor-error-ui .dismiss {
-    cursor: pointer;
-    position: absolute;
-    right: 0.75rem;
-    top: 0.5rem;
+	cursor: pointer;
+	position: absolute;
+	right: 0.75rem;
+	top: 0.5rem;
 }

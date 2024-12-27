@@ -1,12 +1,12 @@
 @page "/blogPost/{blogPostId}/{slug?}"
 @using System.Text
-@using Markdig
 @using LinkDotNet.Blog.Domain
 @using LinkDotNet.Blog.Infrastructure.Persistence
 @using LinkDotNet.Blog.Web.Features.Bookmarks
 @using LinkDotNet.Blog.Web.Features.Services
 @using LinkDotNet.Blog.Web.Features.ShowBlogPost.Components
 @using LinkDotNet.Blog.Web.Features.SupportMe.Components
+@using Markdig
 @using LinkDotNet.Blog.Web.Features.Bookmarks.Components
 @inject IRepository<BlogPost> BlogPostRepository
 @inject IRepository<ShortCode> ShortCodeRepository
@@ -20,7 +20,7 @@
 
 @if (isLoading)
 {
-    <Loading></Loading>
+	<Loading></Loading>
 }
 else if (!isLoading && BlogPost is null)
 {
@@ -40,6 +40,9 @@ else if (BlogPost is not null)
 		                PublishedDate="@BlogPost.UpdatedDate"
 		                Author="@ProfileInformation.Value.Name"/>
 	</OgData>
+
+	<section class="stroked-odd position-absolute" style="height: 200px; z-index: -1 !important;"></section>
+	<section class="stroked position-absolute" style="height: 1200px; z-index: -1 !important;"></section>
 
 	<div class="d-flex justify-content-center pt-2 blog-outer-box">
 		<div class="blog-container">
@@ -63,7 +66,8 @@ else if (BlogPost is not null)
 							<div class="d-flex flex-wrap gap-2">
 								@foreach (var tag in BlogPost.Tags)
 								{
-									<a class="goto-tag badge bg-primary rounded-pill text-decoration-none" href="/searchByTag/@(Uri.EscapeDataString(tag))">@tag</a>
+									<a class="goto-tag badge bg-primary rounded-pill text-decoration-none"
+									   href="/searchByTag/@(Uri.EscapeDataString(tag))">@tag</a>
 								}
 							</div>
 						</div>
@@ -86,13 +90,13 @@ else if (BlogPost is not null)
 				<Like BlogPost="@BlogPost" OnBlogPostLiked="@UpdateLikes"></Like>
 				<ShareBlogPost></ShareBlogPost>
 			</div>
-            @if (SupportConfiguration.Value.ShowUnderBlogPost)
-            {
-                <DonationSection />
-            }
-            @if (AppConfiguration.Value.ShowSimilarPosts)
+			@if (SupportConfiguration.Value.ShowUnderBlogPost)
 			{
-				<SimilarBlogPostSection BlogPost="@BlogPost" />
+				<DonationSection/>
+			}
+			@if (AppConfiguration.Value.ShowSimilarPosts)
+			{
+				<SimilarBlogPostSection BlogPost="@BlogPost"/>
 			}
 			<CommentSection></CommentSection>
 		</div>
@@ -144,7 +148,7 @@ else if (BlogPost is not null)
         }
     }
 
-    private MarkupString EnrichWithShortCodes(string content)
+	private MarkupString EnrichWithShortCodes(string content)
 	{
 		if (shortCodes.Count == 0)
 		{

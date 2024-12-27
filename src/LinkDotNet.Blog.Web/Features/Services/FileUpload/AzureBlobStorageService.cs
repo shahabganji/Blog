@@ -1,11 +1,11 @@
-using Azure.Identity;
-using Azure.Storage.Blobs;
-using Azure.Storage.Blobs.Models;
-using Microsoft.Extensions.Options;
 using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Azure.Identity;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Microsoft.Extensions.Options;
 
 namespace LinkDotNet.Blog.Web.Features.Services.FileUpload;
 
@@ -32,10 +32,7 @@ public class AzureBlobStorageService : IBlobUploadService
         var blobOptions = new BlobUploadOptions();
         if (options.SetCacheControlHeader)
         {
-            blobOptions.HttpHeaders = new BlobHttpHeaders
-            {
-                CacheControl = "public, max-age=604800"
-            };
+            blobOptions.HttpHeaders = new BlobHttpHeaders { CacheControl = "public, max-age=604800" };
         }
 
         await blobClient.UploadAsync(fileStream, blobOptions);
@@ -61,12 +58,14 @@ public class AzureBlobStorageService : IBlobUploadService
         if (configuration.AuthenticationMode == AuthenticationMode.ConnectionString.Key)
         {
             var connectionString = configuration.ConnectionString
-                                   ?? throw new InvalidOperationException("ConnectionString must be set when using ConnectionString authentication mode");
+                                   ?? throw new InvalidOperationException(
+                                       "ConnectionString must be set when using ConnectionString authentication mode");
             return new BlobServiceClient(connectionString);
         }
 
         var serviceUrl = configuration.ServiceUrl
-                         ?? throw new InvalidOperationException("ServiceUrl must be set when using Default authentication mode");
+                         ?? throw new InvalidOperationException(
+                             "ServiceUrl must be set when using Default authentication mode");
 
         return new BlobServiceClient(new Uri(serviceUrl), new DefaultAzureCredential());
     }
