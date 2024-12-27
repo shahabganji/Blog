@@ -8,7 +8,9 @@ window.initGiscus = (divClass, giscus) => {
     script.setAttribute('data-mapping', 'title')
     script.setAttribute('data-reactions-enabled', '0')
     script.setAttribute('data-emit-metadata', '0')
-    script.setAttribute('data-theme', 'dark_dimmed')
+	script.setAttribute('data-theme', 'preferred_color_scheme')
+	script.setAttribute('data-loading', 'lazy')
+	script.setAttribute('data-lang', 'en')
     script.crossOrigin = 'anonymous'
 
     const elementToAppend = document.getElementsByClassName(divClass)[0]

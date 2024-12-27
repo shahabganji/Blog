@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Code Chef Web App" type="AzureWebAppDeploy">
+	<configuration default="false" name="Code Chef Web App" type="AzureWebAppDeploy" focusToolWindowBeforeRun="true">
     <option name="appServicePlanName" value="codechef" />
     <option name="appServicePlanResourceGroupName" value="blog" />
     <option name="operatingSystem" value="Linux" />

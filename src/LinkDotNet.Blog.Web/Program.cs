@@ -1,8 +1,8 @@
 using System.Threading.Tasks;
 using Blazored.Toast;
 using HealthChecks.UI.Client;
-using LinkDotNet.Blog.Web.Authentication.OpenIdConnect;
 using LinkDotNet.Blog.Web.Authentication.Dummy;
+using LinkDotNet.Blog.Web.Authentication.OpenIdConnect;
 using LinkDotNet.Blog.Web.RegistrationExtensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -63,11 +63,9 @@ public class Program
         app.UseHttpsRedirection();
         app.MapStaticAssets();
 
-        app.MapHealthChecks("/health", new HealthCheckOptions
-        {
-            ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse,
-        })
-        .RequireAuthorization();
+        app.MapHealthChecks("/health",
+                new HealthCheckOptions { ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse, })
+            .RequireAuthorization();
 
         app.UseRouting();
 
