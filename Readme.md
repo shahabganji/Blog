@@ -69,3 +69,12 @@ This repository offers a [GitHub Codespace](https://github.com/features/codespac
 You want a visual walkthrough through the features and details? The awesome [@ncosentino / DevLeader](https://github.com/ncosentino/) has a YouTube video/series: 
  * [*"WordPress Is A DUMPSTER FIRE - Build A Blog In Blazor!"*](https://www.youtube.com/watch?v=RGq2s25xTPE).
  * [*"WordPress is HISTORY! Get Your Own Blazor Blog Running TODAY!"*](https://www.youtube.com/watch?v=A2vAO7jxFz4)
+
+## Other Resources:
+
+* https://devicon.dev/
+* https://github.com/devicons/devicon/tree/master
+* https://code.benco.io/icon-collection/azure-icons/
+* https://substack.com/?utm_source=embed&utm_content=devleaderweekly
+* https://www.brandghost.ai/
+* 
