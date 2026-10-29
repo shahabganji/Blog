@@ -1,7 +1,7 @@
 <Project>
 
 	<PropertyGroup>
-		<TargetFramework>net10.0</TargetFramework>
+		<TargetFramework>net11.0</TargetFramework>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
 
@@ -14,6 +14,9 @@
 		     severities configured there never reach diagnostics reported against .razor files,
 		     so the Razor generated code needs the suppression here as well. -->
 		<NoWarn>$(NoWarn);S8969;S8970</NoWarn>
+		<!-- Introduced with the .NET 11 SDK: new Blazor analyzers (BL0012, BL0013, BL0016) and Sonar's S3881
+		     now reported against Razor generated declaration files (components using @implements IDisposable). -->
+		<NoWarn>$(NoWarn);BL0012;BL0013;BL0016;S3881</NoWarn>
 	</PropertyGroup>
 
 </Project>
