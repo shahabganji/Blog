@@ -8,6 +8,17 @@
 			"environmentVariables": {
 				"ASPNETCORE_ENVIRONMENT": "Development"
 			}
+		},
+		"LinkDotNet.Blog.Web (Local SQLite)": {
+			"commandName": "Project",
+			"dotnetRunMessages": true,
+			"launchBrowser": false,
+			"applicationUrl": "https://localhost:1111",
+			"environmentVariables": {
+				"ASPNETCORE_ENVIRONMENT": "Development",
+				"PersistenceProvider": "Sqlite",
+				"ConnectionString": "DataSource=local-blog.db"
+			}
 		}
 	}
 }
