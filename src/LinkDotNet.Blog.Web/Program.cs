@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Blazored.Toast;
 using HealthChecks.UI.Client;
@@ -80,6 +81,16 @@ public class Program
 
         app.UseResponseCompression();
         app.UseHttpsRedirection();
+        app.MapWhen(
+            context => context.Request.Path.StartsWithSegments("/talks", StringComparison.OrdinalIgnoreCase)
+                       && context.Request.Path.Value!.EndsWith("/slides", StringComparison.OrdinalIgnoreCase),
+            slideDeck =>
+            {
+                slideDeck.UseStaticFiles(new StaticFileOptions
+                {
+                    ServeUnknownFileTypes = true, DefaultContentType = "text/html; charset=utf-8",
+                });
+            });
         app.MapStaticAssets();
 
         app.MapHealthChecks("/health",
