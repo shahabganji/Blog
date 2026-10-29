@@ -1,10 +1,12 @@
-﻿using System.Linq;
 using AngleSharp.Html.Dom;
 using LinkDotNet.Blog.TestUtilities;
 using LinkDotNet.Blog.Web.Features.Home.Components;
+using LinkDotNet.Blog.Web.Features.Services;
+using LinkDotNet.Blog.Web.Features.Services.Tags;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Linq;
 
 namespace LinkDotNet.Blog.IntegrationTests.Web.Shared;
 
@@ -13,12 +15,21 @@ public class NavMenuTests : BunitContext
     public NavMenuTests()
     {
         ComponentFactories.Add<ThemeToggler, ThemeTogglerStub>();
+        JSInterop.SetupVoid("closeDrawer");
+
+        var tagQueryService = Substitute.For<ITagQueryService>();
+        Services.AddSingleton(tagQueryService);
+
+        Services.AddSingleton(
+            Options.Create(new ApplicationConfigurationBuilder().Build())
+        );
     }
 
     [Fact]
     public void ShouldNavigateToSearchPage()
     {
         Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().Build()));
+        Services.AddScoped(_ => Substitute.For<ICurrentUserService>());
         AddAuthorization();
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         var cut = Render<NavMenu>();
@@ -30,12 +41,26 @@ public class NavMenuTests : BunitContext
     }
 
     [Fact]
+    public void ShouldCloseDrawerWhenNavigating()
+    {
+        Services.AddScoped(_ => Substitute.For<ICurrentUserService>());
+        AddAuthorization();
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        Render<NavMenu>();
+
+        navigationManager.NavigateTo("archive");
+
+        JSInterop.VerifyInvoke("closeDrawer");
+    }
+
+    [Fact]
     public void ShouldDisplayAboutMePage()
     {
         var config = Options.Create(new ApplicationConfigurationBuilder()
             .WithIsAboutMeEnabled(true)
             .Build());
         Services.AddScoped(_ => config);
+        Services.AddScoped(_ => Substitute.For<ICurrentUserService>());
         AddAuthorization();
 
         var cut = Render<NavMenu>();
@@ -51,6 +76,7 @@ public class NavMenuTests : BunitContext
     {
         var config = Options.Create(new ProfileInformationBuilder().Build());
         Services.AddScoped(_ => config);
+        Services.AddScoped(_ => Substitute.For<ICurrentUserService>());
         AddAuthorization();
         var cut = Render<NavMenu>();
 
@@ -66,7 +92,8 @@ public class NavMenuTests : BunitContext
             .WithBlogBrandUrl("http://localhost/img.png")
             .Build());
         Services.AddScoped(_ => config);
-        
+        Services.AddScoped(_ => Substitute.For<ICurrentUserService>());
+
         var profileInfoConfig = Options.Create(new ProfileInformationBuilder().Build());
         Services.AddScoped(_ => profileInfoConfig);
 
@@ -74,7 +101,7 @@ public class NavMenuTests : BunitContext
 
         var cut = Render<NavMenu>();
 
-        var brandImage = cut.Find(".nav-brand img");
+        var brandImage = cut.Find(".navbar-brand img");
         var image = brandImage as IHtmlImageElement;
         image.ShouldNotBeNull();
         image.Source.ShouldBe("http://localhost/img.png");
@@ -90,7 +117,8 @@ public class NavMenuTests : BunitContext
             .WithBlogName("Steven")
             .Build());
         Services.AddScoped(_ => config);
-        
+        Services.AddScoped(_ => Substitute.For<ICurrentUserService>());
+
         var profileInfoConfig = Options.Create(new ProfileInformationBuilder().Build());
         Services.AddScoped(_ => profileInfoConfig);
         
@@ -98,7 +126,7 @@ public class NavMenuTests : BunitContext
 
         var cut = Render<NavMenu>();
 
-        var brandImage = cut.Find(".nav-brand");
+        var brandImage = cut.Find(".navbar-brand");
         var image = brandImage as IHtmlAnchorElement;
         image.ShouldNotBeNull();
         image.TextContent.ShouldBe("Steven");

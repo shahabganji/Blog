@@ -1,14 +1,16 @@
 @using LinkDotNet.Blog.Web.Features.SupportMe.Components
+@using LinkDotNet.Blog.Web.Features.TagDiscovery
 @inject IOptions<ApplicationConfiguration> Configuration
 @inject IOptions<SupportMeConfiguration> SupportConfiguration
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
-<nav class="navbar navbar-expand-lg navbar-light w-100">
+<nav class="navbar xl:navbar-expand w-100 sticky-top site-nav">
     <div class="container-fluid">
         @if (!string.IsNullOrEmpty(Configuration.Value.BlogBrandUrl))
         {
-            <a class="nav-brand ms-5" href="/">
+            <a class="navbar-brand ms-3 xl:ms-7" href="/">
                 <img style="max-height: 70px; width: 70px; height: 70px;"
                      src="@Configuration.Value.BlogBrandUrl.ToAbsoluteUrl(NavigationManager.BaseUri)"
                      alt="brand" />
@@ -16,22 +18,26 @@
         }
         else
         {
-            <a class="nav-brand barcode ms-5" href="/">@Configuration.Value.BlogName</a>
+            <a class="navbar-brand barcode ms-3 xl:ms-7" href="/">@Configuration.Value.BlogName</a>
         }
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
+        <button class="btn-icon navbar-toggler" type="button" data-bs-toggle="drawer" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon" aria-hidden="true"></span>
         </button>
-        <div class="collapse navbar-collapse" id="navbarSupportedContent">
-            <ul class="navbar-nav ms-auto mb-2 mb-lg-0 me-5">
-	            <li><a class="nav-link" href="/"><i class="home"></i> Home</a></li>
-	            <li><a class="nav-link" href="/archive"><i class="books"></i> Posts</a></li>
-	            <li><a class="nav-link" href="/bookmarks"><i class="bookmark"></i> Bookmarks</a>
+        <dialog class="drawer drawer-end" tabindex="-1" id="navbarSupportedContent" aria-label="Navigation">
+            <div class="drawer-header">
+                <button type="button" class="btn-close ms-auto" data-bs-dismiss="drawer" aria-label="Close"></button>
+            </div>
+            <div class="drawer-body">
+            <ul class="navbar-nav xl:ms-auto mb-3 xl:mb-0 xl:me-7 column-gap-3">
+	            <li><a class="nav-link" href="/">Home</a></li>
+	            <li><a class="nav-link" href="/archive">Posts</a></li>
+	            <li><a class="nav-link" href="/bookmarks">Bookmarks</a>
 		        </li>
 	            @if (Configuration.Value.IsAboutMeEnabled)
                 {
                     <li class="nav-item">
                         <a class="nav-link" href="AboutMe">
-                            <i class="profile"></i> About me
+                            About me
                         </a>
                     </li>
                 }
@@ -40,32 +46,36 @@
                 {
                     <li class="nav-item">
                         <a class="nav-link" href="SupportMe">
-                            <i class="coin-dollar"></i> Support me
+                            Support me
                         </a>
                     </li>
                 }
 
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="rssDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="RSS Selector">
-                        <i class="rss2"></i> RSS
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="rssDropdown">
-	                    <li><a class="dropdown-item" href="/feed.rss" aria-label="RSS with All Posts">All Posts (Summary)</a></li>
-	                    <li><a class="dropdown-item" href="/feed.rss?withContent=true" aria-label="RSS with Full Content">Most Recent Posts (Full Content)</a></li>
-                    </ul>
-                </li>
-
                 <AccessControl CurrentUri="@currentUri"></AccessControl>
                 <li class="nav-item d-flex align-items-center"><ThemeToggler Class="nav-link"></ThemeToggler></li>
+
+                @if (Configuration.Value.EnableTagDiscoveryPanel)
+                {
+                    <li class="nav-item d-flex align-items-center xl:me-3 mb-3 xl:mb-0">
+                        <a class="nav-link" role="button" @onclick="ToggleTagDiscoveryPanel"
+                           title="Discover new topics"><i class="price-tags"></i><span class="xl:d-none">Discover topics</span></a>
+                    </li>
+                }
+
                 <li class="d-flex">
                     <SearchInput SearchEntered="NavigateToSearchPage"></SearchInput>
                 </li>
             </ul>
-        </div>
+            </div>
+        </dialog>
     </div>
 </nav>
+<TagDiscoveryPanel IsOpen="@_isOpen" OnClose="CloseTagDiscoveryPanel" />
+
 @code {
     private string currentUri = string.Empty;
+
+    private bool _isOpen;
 
     protected override void OnInitialized()
     {
@@ -87,6 +97,22 @@
     private void UpdateUri(object? sender, LocationChangedEventArgs e)
     {
         currentUri = e.Location;
-        StateHasChanged();
+        _ = InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await JSRuntime.InvokeVoidAsync("closeDrawer");
+        });
+    }
+
+    private async Task ToggleTagDiscoveryPanel()
+    {
+        // The drawer is a modal dialog, so the panel would open behind it and stay inert
+        await JSRuntime.InvokeVoidAsync("closeDrawer");
+        _isOpen = !_isOpen;
+    }
+
+    private void CloseTagDiscoveryPanel()
+    {
+        _isOpen = false;
     }
 }

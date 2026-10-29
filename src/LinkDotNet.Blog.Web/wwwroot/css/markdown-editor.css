@@ -1,0 +1,208 @@
+.markdown-editor-container {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    background-color: var(--bs-bg-body);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    box-shadow: var(--bs-box-shadow-sm);
+}
+
+.markdown-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.375rem 0.5rem;
+    background-color: var(--bs-bg-2);
+    border-bottom: 1px solid var(--bs-border-color);
+    flex-wrap: wrap;
+    min-height: 2.75rem;
+}
+
+.toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: none;
+    border-radius: 0.25rem;
+    background-color: transparent;
+    color: var(--bs-fg-body);
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out, opacity 0.15s ease-in-out;
+    font-size: 1rem;
+}
+
+.toolbar-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.toolbar-btn:disabled:hover {
+    background-color: transparent;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+    background-color: var(--bs-bg-1);
+    color: var(--bs-fg-body);
+}
+
+.toolbar-btn:active:not(:disabled),
+.toolbar-btn.active {
+    background-color: var(--bs-primary-base);
+    color: #fff;
+}
+
+.toolbar-btn:focus-visible {
+    outline: 2px solid var(--bs-primary-base);
+    outline-offset: 2px;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 1.25rem;
+    background-color: var(--bs-border-color);
+    margin: 0 0.375rem;
+}
+
+.markdown-preview.preview-only {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.editor-content {
+    display: flex;
+    flex: 1 1 auto;
+    overflow: hidden;
+    position: relative;
+}
+
+.markdown-textarea {
+    width: 100%;
+    height: 100%;
+    padding: 1.25rem;
+    border: none;
+    outline: none;
+    resize: none;
+    background-color: light-dark(var(--bs-bg-body), rgba(0, 0, 0, 0.2));
+    color: var(--bs-fg-body);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    tab-size: 4;
+    letter-spacing: 0.01em;
+    scrollbar-width: thin;
+    scrollbar-color: light-dark(rgba(128, 128, 128, 0.3), rgba(255, 255, 255, 0.2)) transparent;
+}
+
+.markdown-textarea::placeholder {
+    color: var(--bs-fg-3);
+    opacity: 0.5;
+    font-style: italic;
+}
+
+.markdown-textarea:focus {
+    outline: none;
+}
+
+.markdown-preview {
+    padding: 1rem;
+    overflow-y: auto;
+    height: 100%;
+    color: var(--bs-fg-body);
+    scrollbar-width: thin;
+    scrollbar-color: light-dark(rgba(128, 128, 128, 0.3), rgba(255, 255, 255, 0.2)) transparent;
+}
+
+.markdown-preview pre {
+    padding: 1rem;
+    background-color: var(--bs-bg-2);
+    border-radius: 0.375rem;
+    overflow-x: auto;
+    border: 1px solid var(--bs-border-color);
+}
+
+.markdown-preview .code-block-header {
+    background-color: transparent;
+    border-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .toolbar-btn {
+        width: 1.75rem;
+        height: 1.75rem;
+        font-size: 0.875rem;
+    }
+}
+
+.markdown-editor-container:focus-within {
+    outline: 2px solid var(--bs-primary-base);
+    outline-offset: 2px;
+}
+
+/* Table popover */
+.table-btn-wrapper {
+    position: relative;
+}
+
+.table-popover-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1049;
+    background: transparent;
+}
+
+.table-popover {
+    position: absolute;
+    top: calc(100% + 0.375rem);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1050;
+    min-width: 11rem;
+    background-color: var(--bs-bg-body);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    box-shadow: var(--bs-box-shadow);
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.table-popover-header {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: var(--bs-fg-body);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.1rem;
+}
+
+.table-popover-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--bs-fg-body);
+    cursor: default;
+}
+
+.table-popover-field input[type="number"] {
+    width: 4rem;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.25rem;
+    background-color: var(--bs-bg-body);
+    color: var(--bs-fg-body);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.table-popover-field input[type="number"]:focus {
+    outline: 2px solid var(--bs-primary-base);
+    outline-offset: 1px;
+}

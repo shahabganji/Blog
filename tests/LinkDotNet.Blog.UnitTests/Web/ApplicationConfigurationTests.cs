@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.TestUtilities;
+using LinkDotNet.Blog.Web;
 using LinkDotNet.Blog.Web.Authentication.OpenIdConnect;
 using LinkDotNet.Blog.Web.Features.ShowBlogPost.Components;
 using Microsoft.Extensions.Configuration;
@@ -34,6 +35,7 @@ public class ApplicationConfigurationTests
             { "Giscus:CategoryId", "generalid" },
             { "Disqus:Shortname", "blog" },
             { "ShowReadingIndicator", "true" },
+            { "ShowBuildInformation", "true" },
             { "SupportMe:KofiToken", "ABC" },
             { "SupportMe:PatreonName", "linkdotnet" },
             { "SupportMe:GithubSponsorName", "linkdotnet" },
@@ -45,7 +47,10 @@ public class ApplicationConfigurationTests
             { "Authentication:Provider","Auth0"},
             { "Authentication:ClientId","123"},
             { "Authentication:ClientSecret","qwe"},
-            { "Authentication:Domain","example.com"}
+            { "Authentication:Domain","example.com"},
+            { "UseMultiAuthorMode","true"},
+            { "ShowCodeBlockLanguage","false"},
+            { "EnableMarkdownForLlms","true"}
 
         };
         var configuration = new ConfigurationBuilder()
@@ -64,6 +69,10 @@ public class ApplicationConfigurationTests
         appConfiguration.BlogPostsPerPage.ShouldBe(5);
         appConfiguration.IsAboutMeEnabled.ShouldBeTrue();
         appConfiguration.ShowReadingIndicator.ShouldBeTrue();
+        appConfiguration.ShowBuildInformation.ShouldBeTrue();
+        appConfiguration.UseMultiAuthorMode.ShouldBeTrue();
+        appConfiguration.ShowCodeBlockLanguage.ShouldBeFalse();
+        appConfiguration.EnableMarkdownForLlms.ShouldBeTrue();
 
         var giscusConfiguration = new GiscusConfigurationBuilder().Build();
         configuration.GetSection(GiscusConfiguration.GiscusConfigurationSection).Bind(giscusConfiguration);
@@ -202,6 +211,19 @@ public class ApplicationConfigurationTests
         configuration.Bind(appConfiguration);
 
         appConfiguration.BlogPostsPerPage.ShouldBe(10);
+    }
+
+    [Fact]
+    public void ShouldDisableMarkdownForLlmsIfNotSet()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+
+        var appConfiguration = new ApplicationConfiguration { BlogName = "Blog", ConnectionString = "cs", DatabaseName = "db" };
+        configuration.Bind(appConfiguration);
+
+        appConfiguration.EnableMarkdownForLlms.ShouldBeFalse();
     }
 
     [Fact]

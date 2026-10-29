@@ -1,10 +1,16 @@
 using System.Threading.Tasks;
 using LinkDotNet.Blog.Web.Features.Components;
+using LinkDotNet.Blog.TestUtilities;
 
 namespace LinkDotNet.Blog.UnitTests.Web.Features.Components;
 
 public class UploadFileModalDialogTests : BunitContext
 {
+    public UploadFileModalDialogTests()
+    {
+        JSInterop.SetupNativeDialog();
+    }
+
     [Fact]
     public async Task ShouldReturnFilenameAndSettingWhenSubmitting()
     {
@@ -26,7 +32,7 @@ public class UploadFileModalDialogTests : BunitContext
         var cut = Render<UploadFileModalDialog>();
         var task = cut.InvokeAsync(() => cut.Instance.ShowAsync("Filename.png"));
         
-        cut.Find("#abort").Click();
+        await cut.Find("#abort").ClickAsync();
 
         var result = await task;
         result.ShouldBeNull();

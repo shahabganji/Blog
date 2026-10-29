@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using LinkDotNet.Blog.Domain;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using ZiggyCreatures.Caching.Fusion;
 
 namespace LinkDotNet.Blog.Infrastructure.Persistence;
 
@@ -12,22 +13,20 @@ public sealed class CachedRepository<T> : IRepository<T>
     where T : Entity
 {
     private readonly IRepository<T> repository;
-    private readonly IMemoryCache memoryCache;
+    private readonly IFusionCache fusionCache;
 
-    public CachedRepository(IRepository<T> repository, IMemoryCache memoryCache)
+    public CachedRepository(IRepository<T> repository, IFusionCache fusionCache)
     {
         this.repository = repository;
-        this.memoryCache = memoryCache;
+        this.fusionCache = fusionCache;
     }
 
     public ValueTask<HealthCheckResult> PerformHealthCheckAsync() => repository.PerformHealthCheckAsync();
 
-    public async ValueTask<T?> GetByIdAsync(string id) =>
-        (await memoryCache.GetOrCreateAsync(id, async entry =>
+    public async ValueTask<T?> GetByIdAsync(string id) => await fusionCache.GetOrSetAsync(id, async c =>
         {
-            entry.SlidingExpiration = TimeSpan.FromDays(7);
             return await repository.GetByIdAsync(id);
-        }))!;
+        }, TimeSpan.FromDays(7));
 
     public async ValueTask<IPagedList<T>> GetAllAsync(Expression<Func<T, bool>>? filter = null,
         Expression<Func<T, object>>? orderBy = null,
@@ -45,6 +44,12 @@ public sealed class CachedRepository<T> : IRepository<T>
         int pageSize = int.MaxValue) =>
         await repository.GetAllByProjectionAsync(selector, filter, orderBy, descending, page, pageSize);
 
+    public async ValueTask<IReadOnlyList<TResult>> GetGroupedByAsync<TKey, TResult>(
+        Expression<Func<T, TKey>> keySelector,
+        Expression<Func<IGrouping<TKey, T>, TResult>> resultSelector,
+        Expression<Func<T, bool>>? filter = null) =>
+        await repository.GetGroupedByAsync(keySelector, resultSelector, filter);
+
     public async ValueTask StoreAsync(T entity)
     {
         ArgumentNullException.ThrowIfNull(entity);
@@ -53,14 +58,14 @@ public sealed class CachedRepository<T> : IRepository<T>
 
         if (!string.IsNullOrEmpty(entity.Id))
         {
-            memoryCache.Remove(entity.Id);
+            await fusionCache.RemoveAsync(entity.Id);
         }
     }
 
     public async ValueTask DeleteAsync(string id)
     {
         await repository.DeleteAsync(id);
-        memoryCache.Remove(id);
+        await fusionCache.RemoveAsync(id);
     }
 
     public async ValueTask DeleteBulkAsync(IReadOnlyCollection<string> ids) => await repository.DeleteBulkAsync(ids);

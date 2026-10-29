@@ -34,6 +34,12 @@ public class Program
         builder.Services.AddSecurityHeaderPolicies()
             .SetDefaultPolicy(p =>
                 p.AddDefaultSecurityHeaders()
+                    .AddContentSecurityPolicy(csp =>
+                    {
+                        csp.AddObjectSrc().OverHttps();
+                        csp.AddFormAction().Self();
+                        csp.AddFrameAncestors().None();
+                    })
                     .AddCrossOriginEmbedderPolicy(policy => policy.UnsafeNone())
                     .AddPermissionsPolicy(policy =>
                     {
@@ -51,9 +57,10 @@ public class Program
             .AddStorageProvider(builder.Configuration)
             .AddImageUploadProvider(builder.Configuration)
             .AddBlazoredToast()
-            .AddBlazoriseWithBootstrap()
             .AddResponseCompression()
             .AddHealthCheckSetup();
+
+        builder.Services.AddAntiforgery();
 
         if (builder.Environment.IsDevelopment())
         {
@@ -61,7 +68,7 @@ public class Program
         }
         else
         {
-            builder.Services.UseAuthentication();
+            builder.Services.UseAuthentication(builder.Configuration);
         }
     }
 
@@ -97,6 +104,8 @@ public class Program
                 new HealthCheckOptions { ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse, })
             .RequireAuthorization();
 
+        app.UseStatusCodePagesWithReExecute("/NotFound");
+
         app.UseRouting();
 
         app.UseUserCulture();
@@ -104,11 +113,13 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
+        app.UseAntiforgery();
+
         app.UseRateLimiter();
+        app.UseBlogPostMarkdown();
         app.MapControllers();
-        app.MapBlazorHub();
-        app.MapFallbackToPage("/_Host");
-        app.MapFallbackToPage("/searchByTag/{tag}", "/_Host");
-        app.MapFallbackToPage("/search/{searchTerm}", "/_Host");
+        app.MapRazorPages();
+        app.MapRazorComponents<App>()
+            .AddInteractiveServerRenderMode();
     }
 }

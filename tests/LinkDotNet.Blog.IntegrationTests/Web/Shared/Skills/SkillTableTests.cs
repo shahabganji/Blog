@@ -23,7 +23,7 @@ public class SkillTableTests : SqlDatabaseTestBase<Skill>
         var cut = ctx.Render<SkillTable>(p =>
             p.Add(s => s.ShowAdminActions, true));
 
-        cut.WaitForComponent<SkillTag>().Find("button").Click();
+        await cut.WaitForComponent<SkillTag>().Find("button").ClickAsync();
 
         var items = await Repository.GetAllAsync();
         items.ShouldBeEmpty();
@@ -34,11 +34,12 @@ public class SkillTableTests : SqlDatabaseTestBase<Skill>
     public async Task ShouldAddSkill()
     {
         using var ctx = new BunitContext();
+        ctx.JSInterop.SetupNativeDialog();
         ctx.Services.AddScoped(_ => Repository);
         ctx.Services.AddScoped(_ => Substitute.For<IToastService>());
         var cut = ctx.Render<SkillTable>(p =>
             p.Add(s => s.ShowAdminActions, true));
-        cut.Find("button").Click();
+        await cut.Find("button").ClickAsync();
         var dialog = cut.FindComponent<AddSkillDialog>();
         dialog.Find("#title").Change("C#");
         dialog.Find("#image").Change("Url");
@@ -84,8 +85,8 @@ public class SkillTableTests : SqlDatabaseTestBase<Skill>
             p.Add(s => s.ShowAdminActions, true));
         cut.WaitForElement(".skill-tag");
 
-        cut.FindAll(".skill-tag")[0].Drag();
-        cut.FindAll(".proficiency-level")[1].Drop();
+        await cut.FindAll(".skill-tag")[0].DragAsync();
+        await cut.FindAll(".proficiency-level")[1].DropAsync();
 
         var skillFromDb = await Repository.GetByIdAsync(skill.Id);
         skillFromDb.ShouldNotBeNull();
@@ -105,8 +106,8 @@ public class SkillTableTests : SqlDatabaseTestBase<Skill>
             p.Add(s => s.ShowAdminActions, true));
         cut.WaitForElement(".skill-tag");
 
-        cut.FindAll(".skill-tag")[0].Drag();
-        cut.FindAll(".proficiency-level")[0].Drop();
+        await cut.FindAll(".skill-tag")[0].DragAsync();
+        await cut.FindAll(".proficiency-level")[0].DropAsync();
 
         var skillFromDb = await Repository.GetByIdAsync(skill.Id);
         skillFromDb.ShouldNotBeNull();

@@ -1,33 +1,63 @@
-﻿<AuthorizeView>
+@using LinkDotNet.Blog.Web.Features.Services
+@inject IOptions<ApplicationConfiguration> AppConfiguration
+@inject ICurrentUserService CurrentUserService
+
+<AuthorizeView>
     <Authorized>
-        <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown"
+        <li class="nav-item">
+            <a class="nav-link" href="#" id="adminDropdown" role="button" data-bs-toggle="menu"
                aria-expanded="false">
-                <i class="user-tie"></i> Admin
+                Admin
             </a>
-            <ul class="dropdown-menu ps-0" aria-labelledby="navbarDropdown">
-                <li><h6 class="dropdown-header">Blog posts</h6></li>
-                <li><a class="dropdown-item" href="create">Create new</a></li>
-                <li><a class="dropdown-item" href="draft">Show drafts</a></li>
-                <li><a class="dropdown-item" href="settings">Show settings</a></li>
-                <li><hr class="dropdown-divider"></li>
-                <li><h6 class="dropdown-header">Analytics</h6></li>
-                <li><a class="dropdown-item" href="dashboard">Dashboard</a></li>
-                <li><hr class="dropdown-divider"></li>
-                <li><h6 class="dropdown-header">Others</h6></li>
-                <li><a class="dropdown-item" href="short-codes">Shortcodes</a></li>
-                <li><hr class="dropdown-divider"></li>
-	            <li><a class="dropdown-item" target="_blank" href="https://github.com/linkdotnet/Blog/releases" rel="noreferrer">Releases</a></li>
-            </ul>
+            <div class="menu" aria-labelledby="adminDropdown">
+                <h6 class="menu-header">Blog posts</h6>
+                <a class="menu-item" href="create">Create new</a>
+                <a class="menu-item" href="draft">Show drafts</a>
+                <a class="menu-item" href="settings">Show settings</a>
+                <hr class="menu-divider">
+                <h6 class="menu-header">Analytics</h6>
+                <a class="menu-item" href="dashboard">Dashboard</a>
+                @if (AppConfiguration.Value.EnableBrokenLinkChecker)
+                {
+                    <a class="menu-item" href="broken-links">Broken links</a>
+                }
+                <hr class="menu-divider">
+                <h6 class="menu-header">Others</h6>
+                <a class="menu-item" href="short-codes">Shortcodes</a>
+                <hr class="menu-divider">
+	            <a class="menu-item" target="_blank" href="https://github.com/linkdotnet/Blog/releases" rel="noreferrer">Releases</a>
+                @if (authorName is null)
+                {
+                    <hr class="menu-divider">
+                    <a class="menu-item" href="/logout?redirectUri=@CurrentUri">Log out</a>
+                }
+            </div>
         </li>
-        <li class="nav-item"><a class="nav-link" href="logout?redirectUri=@CurrentUri"><i class="lock"></i> Log out</a></li>
+        @if (authorName is not null)
+        {
+            <li class="nav-item">
+                <a class="nav-link" href="#" id="authorDropdown" role="button" data-bs-toggle="menu" aria-expanded="false">
+                    @authorName
+                </a>
+                <div class="menu" aria-labelledby="authorDropdown">
+                    <a class="menu-item" href="logout?redirectUri=@CurrentUri">Log out</a>
+                </div>
+            </li>
+        }
     </Authorized>
-    <NotAuthorized>
-        <li class="nav-item"><a class="nav-link" href="login?redirectUri=@CurrentUri" rel="nofollow"><i class="unlocked"></i> Log in</a></li>
-    </NotAuthorized>
 </AuthorizeView>
 
 @code {
 	[Parameter]
     public string CurrentUri { get; set; } = string.Empty;
+
+    private string? authorName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AppConfiguration.Value.UseMultiAuthorMode)
+        {
+            authorName = await CurrentUserService.GetDisplayNameAsync();
+        }
+    }
 }

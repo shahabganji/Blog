@@ -3,6 +3,7 @@ using System;
 using LinkDotNet.Blog.Infrastructure.Persistence.Sql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -15,56 +16,64 @@ namespace LinkDotNet.Blog.Infrastructure.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.Entity("LinkDotNet.Blog.Domain.BlogPost", b =>
                 {
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .IsUnicode(false)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(900)");
+
+                    b.Property<string>("AuthorName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("Content")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsPublished")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bit");
 
                     b.Property<int>("Likes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("PreviewImageUrl")
                         .IsRequired()
                         .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(1024)");
 
                     b.Property<string>("PreviewImageUrlFallback")
                         .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(1024)");
 
                     b.Property<int>("ReadingTimeInMinutes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("ScheduledPublishDate")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ShortDescription")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Tags")
+                    b.PrimitiveCollection<string>("Tags")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<DateTime>("UpdatedDate")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -80,22 +89,157 @@ namespace LinkDotNet.Blog.Infrastructure.Migrations
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .IsUnicode(false)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(900)");
 
                     b.Property<string>("BlogPostId")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<int>("Clicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<DateOnly>("DateClicked")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("date");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DateClicked", "BlogPostId", "Clicks")
+                        .HasDatabaseName("IX_BlogPostRecords_DateClicked_BlogPostId_Clicks");
+
                     b.ToTable("BlogPostRecords");
+                });
+
+            modelBuilder.Entity("LinkDotNet.Blog.Domain.BlogPostTemplate", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(900)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("ShortDescription")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BlogPostTemplates");
+                });
+
+            modelBuilder.Entity("LinkDotNet.Blog.Domain.BlogPostVersion", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(900)");
+
+                    b.Property<string>("AuthorName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("BlogPostId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PreviewImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("PreviewImageUrlFallback")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<int>("ReadingTimeInMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ShortDescription")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.PrimitiveCollection<string>("Tags")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BlogPostId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_BlogPostVersions_BlogPostId_VersionNumber");
+
+                    b.ToTable("BlogPostVersions", (string)null);
+                });
+
+            modelBuilder.Entity("LinkDotNet.Blog.Domain.BrokenLink", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(900)");
+
+                    b.Property<string>("BlogPostId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("BlogPostTitle")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("CheckedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BrokenLinks");
                 });
 
             modelBuilder.Entity("LinkDotNet.Blog.Domain.ProfileInformationEntry", b =>
@@ -103,15 +247,15 @@ namespace LinkDotNet.Blog.Infrastructure.Migrations
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .IsUnicode(false)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(900)");
 
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<int>("SortOrder")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -123,16 +267,16 @@ namespace LinkDotNet.Blog.Infrastructure.Migrations
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .IsUnicode(false)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(900)");
 
                     b.Property<string>("MarkdownContent")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(512)");
 
                     b.HasKey("Id");
 
@@ -144,12 +288,12 @@ namespace LinkDotNet.Blog.Infrastructure.Migrations
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .IsUnicode(false)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(900)");
 
-                    b.Property<string>("SimilarBlogPostIds")
+                    b.PrimitiveCollection<string>("SimilarBlogPostIds")
                         .IsRequired()
                         .HasMaxLength(1350)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(1350)");
 
                     b.HasKey("Id");
 
@@ -161,26 +305,26 @@ namespace LinkDotNet.Blog.Infrastructure.Migrations
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .IsUnicode(false)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(900)");
 
                     b.Property<string>("Capability")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("IconUrl")
                         .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(1024)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("ProficiencyLevel")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(32)");
 
                     b.HasKey("Id");
 
@@ -192,24 +336,24 @@ namespace LinkDotNet.Blog.Infrastructure.Migrations
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .IsUnicode(false)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(900)");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Place")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("PresentationTitle")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<DateTime>("PublishedDate")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -221,15 +365,15 @@ namespace LinkDotNet.Blog.Infrastructure.Migrations
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .IsUnicode(false)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(900)");
 
                     b.Property<DateOnly>("DateClicked")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("date");
 
                     b.Property<string>("UrlClicked")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(256)");
 
                     b.HasKey("Id");
 

@@ -13,5 +13,7 @@ internal sealed class BlogPostRecordConfiguration : IEntityTypeConfiguration<Blo
             .IsUnicode(false)
             .ValueGeneratedOnAdd();
         builder.Property(s => s.BlogPostId).HasMaxLength(256).IsRequired();
+        builder.HasIndex(x => new { x.DateClicked, x.BlogPostId, x.Clicks })
+            .HasDatabaseName("IX_BlogPostRecords_DateClicked_BlogPostId_Clicks");
     }
 }

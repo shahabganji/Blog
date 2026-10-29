@@ -1,9 +1,11 @@
-using System;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.Infrastructure.Persistence;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System;
+using ZiggyCreatures.Caching.Fusion;
+using ZiggyCreatures.Caching.Fusion.Locking;
+using ZiggyCreatures.Caching.Fusion.Locking.AsyncKeyed;
 
 namespace LinkDotNet.Blog.Web.RegistrationExtensions;
 
@@ -13,40 +15,32 @@ public static class StorageProviderExtensions
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        services.AddMemoryCache();
+        services.AddSingleton<IFusionCacheMemoryLocker, AsyncKeyedMemoryLocker>();
+        services.AddFusionCache().WithRegisteredMemoryLocker();
 
         var provider = configuration["PersistenceProvider"] ?? throw new InvalidOperationException("No persistence provider configured");
         var persistenceProvider = PersistenceProvider.Create(provider);
 
-        if (persistenceProvider == PersistenceProvider.RavenDb)
+        persistenceProvider.Match(
+            onSqlServer: services.UseSqlAsStorageProvider,
+            onSqlite: services.UseSqliteAsStorageProvider,
+            onMySql: services.UseMySqlAsStorageProvider,
+            onPostgreSql: services.UsePostgreSqlAsStorageProvider,
+            onMongoDB: services.UseMongoDBAsStorageProvider,
+            onRavenDb: services.UseRavenDbAsStorageProvider
+        );
+
+        if (persistenceProvider.IsSql())
         {
-            services.UseRavenDbAsStorageProvider();
+            services.RegisterCachedRepository<Infrastructure.Persistence.Sql.Repository<BlogPost>>();
+        }
+        else if (persistenceProvider.IsRavenDb())
+        {
             services.RegisterCachedRepository<Infrastructure.Persistence.RavenDb.Repository<BlogPost>>();
         }
-        else if (persistenceProvider == PersistenceProvider.Sqlite)
+        else if (persistenceProvider.IsMongoDB())
         {
-            services.UseSqliteAsStorageProvider();
-            services.RegisterCachedRepository<Infrastructure.Persistence.Sql.Repository<BlogPost>>();
-        }
-        else if (persistenceProvider == PersistenceProvider.SqlServer)
-        {
-            services.UseSqlAsStorageProvider();
-            services.RegisterCachedRepository<Infrastructure.Persistence.Sql.Repository<BlogPost>>();
-        }
-        else if (persistenceProvider == PersistenceProvider.MySql)
-        {
-            services.UseMySqlAsStorageProvider();
-            services.RegisterCachedRepository<Infrastructure.Persistence.Sql.Repository<BlogPost>>();
-        }
-        else if (persistenceProvider == PersistenceProvider.MongoDB)
-        {
-            services.UseMongoDBAsStorageProvider();
             services.RegisterCachedRepository<Infrastructure.Persistence.MongoDB.Repository<BlogPost>>();
-        }
-        else if (persistenceProvider == PersistenceProvider.PostgreSql)
-        {
-            services.UsePostgreSqlAsStorageProvider();
-            services.RegisterCachedRepository<Infrastructure.Persistence.Sql.Repository<BlogPost>>();
         }
 
         return services;
@@ -58,6 +52,6 @@ public static class StorageProviderExtensions
         services.AddScoped<TRepo>();
         services.AddScoped<IRepository<BlogPost>>(provider => new CachedRepository<BlogPost>(
                 provider.GetRequiredService<TRepo>(),
-                provider.GetRequiredService<IMemoryCache>()));
+                provider.GetRequiredService<IFusionCache>()));
     }
 }

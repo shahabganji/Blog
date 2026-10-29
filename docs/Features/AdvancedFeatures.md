@@ -14,6 +14,9 @@
     - [Layout Mode](#layout-mode)
   - [Examples](#examples)
   - [Notes](#notes)
+- [Callouts](#callouts)
+- [Heading Anchors](#heading-anchors)
+- [Broken Link Checker](#broken-link-checker)
 
 This page lists some of the more advanced or less-used features of the blog software.
 
@@ -126,3 +129,23 @@ dotnet run -- --help
 - The generated CSS is minified for optimal performance
 - When using layout mode, existing `<style>` tags will be replaced
 - If no `<style>` tag exists in layout mode, it will be inserted before `</head>`
+
+## Callouts
+Callouts highlight important information inside a blog post. They use the same syntax as GitHub:
+
+```markdown
+> [!NOTE]
+> Useful information that users should know.
+```
+
+Supported kinds are `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION`.
+
+## Heading Anchors
+Every heading inside a blog post gets a `#` link next to it (visible on hover). Clicking it navigates to the section and copies the link to the clipboard, so it can be shared right away.
+
+## Broken Link Checker
+The broken link checker runs every day at 03:00 and checks all external (`http` and `https`) links and images of published blog posts. Broken links are listed under "Broken links" in the Admin menu, together with the blog post and the reason (for example `404 (NotFound)` or `Timeout`).
+
+ * The job can be started on demand from the settings page.
+ * Links answering with `401`, `403` or `429` are treated as reachable, as those are mostly caused by authentication or bot protection.
+ * The checker can be turned off by setting `EnableBrokenLinkChecker` to `false` in the `appsettings.json`.

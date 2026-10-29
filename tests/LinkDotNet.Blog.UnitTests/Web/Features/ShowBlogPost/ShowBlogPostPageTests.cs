@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using AngleSharp.Html.Dom;
 using Blazored.Toast.Services;
 using LinkDotNet.Blog.Domain;
@@ -8,6 +8,7 @@ using LinkDotNet.Blog.TestUtilities;
 using LinkDotNet.Blog.Web.Features.Bookmarks;
 using LinkDotNet.Blog.Web.Features.Components;
 using LinkDotNet.Blog.Web.Features.Services;
+using LinkDotNet.Blog.Web.Features.Services.Tags;
 using LinkDotNet.Blog.Web.Features.ShowBlogPost;
 using LinkDotNet.Blog.Web.Features.ShowBlogPost.Components;
 using Microsoft.AspNetCore.Components;
@@ -31,6 +32,7 @@ public class ShowBlogPostPageTests : BunitContext
         Services.AddScoped(_ => Substitute.For<IUserRecordService>());
         Services.AddScoped(_ => Substitute.For<IToastService>());
         Services.AddScoped(_ => Substitute.For<IInstantJobRegistry>());
+        Services.AddScoped(_ => Substitute.For<ITagQueryService>());
         Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().Build()));
         Services.AddScoped(_ => Substitute.For<IBookmarkService>());
         AddAuthorization();
@@ -57,6 +59,21 @@ public class ShowBlogPostPageTests : BunitContext
             p => p.Add(s => s.BlogPostId, blogPostId));
 
         cut.FindComponents<Loading>().Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void ShouldTrackVisitOnlyOncePerPageView()
+    {
+        var userRecordService = Substitute.For<IUserRecordService>();
+        Services.AddScoped(_ => userRecordService);
+        var repositoryMock = Substitute.For<IRepository<BlogPost>>();
+        repositoryMock.GetByIdAsync("1").Returns(new BlogPostBuilder().Build());
+        Services.AddScoped(_ => repositoryMock);
+
+        var cut = Render<ShowBlogPostPage>(
+            p => p.Add(s => s.BlogPostId, "1"));
+
+        cut.WaitForAssertion(() => userRecordService.Received(1).StoreUserRecordAsync());
     }
 
     [Fact]
@@ -162,9 +179,84 @@ public class ShowBlogPostPageTests : BunitContext
         var cut = Render<ShowBlogPostPage>(
             p => p.Add(s => s.BlogPostId, "1"));
         
-        cut.FindComponent<OgData>().Instance.CanonicalRelativeUrl.ShouldBe("blogPost/1");
+        cut.FindComponent<OgData>().Instance.CanonicalRelativeUrl.ShouldBe("blogPost/1/sample");
     }
-    
+
+    [Fact]
+    public void ShouldRenderStructuredDataIntoPageBody()
+    {
+        // Regression: the JSON-LD block used to be nested inside OgData's HeadContent.
+        // HeadOutlet does not emit script tags, so it never reached the rendered page.
+        var repositoryMock = Substitute.For<IRepository<BlogPost>>();
+        var blogPost = new BlogPostBuilder()
+            .WithTitle("sample")
+            .Build();
+        blogPost.Id = "1";
+        repositoryMock.GetByIdAsync("1").Returns(blogPost);
+        Services.AddScoped(_ => repositoryMock);
+
+        var cut = Render<ShowBlogPostPage>(
+            p => p.Add(s => s.BlogPostId, "1"));
+
+        var script = cut.Find("script[type='application/ld+json']");
+        script.TextContent.ShouldContain("sample");
+    }
+
+    [Fact]
+    public void ShouldShowAuthorNameWhenUseMultiAuthorModeIsTrue()
+    {
+        var repositoryMock = Substitute.For<IRepository<BlogPost>>();
+        var blogPost = new BlogPostBuilder()
+            .WithAuthorName("Test Author")
+            .Build();
+        blogPost.Id = "1";
+        repositoryMock.GetByIdAsync("1").Returns(blogPost);
+        Services.AddScoped(_ => repositoryMock);
+        Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().WithUseMultiAuthorMode(true).Build()));
+
+        var cut = Render<ShowBlogPostPage>(
+            p => p.Add(s => s.BlogPostId, "1"));
+
+        cut.FindAll("span:contains('Test Author')").ShouldHaveSingleItem();
+        cut.FindAll("i.user-tie").ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void ShouldNotShowAuthorNameWhenUseMultiAuthorModeIsFalse()
+    {
+        var repositoryMock = Substitute.For<IRepository<BlogPost>>();
+        var blogPost = new BlogPostBuilder()
+            .WithAuthorName("Test Author")
+            .Build();
+        blogPost.Id = "1";
+        repositoryMock.GetByIdAsync("1").Returns(blogPost);
+        Services.AddScoped(_ => repositoryMock);
+        Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().WithUseMultiAuthorMode(false).Build()));
+
+        var cut = Render<ShowBlogPostPage>(
+            p => p.Add(s => s.BlogPostId, "1"));
+
+        cut.FindAll("span:contains('Test Author')").ShouldBeEmpty();
+        cut.FindAll("i.user-tie").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ShouldNotShowAuthorNameWhenAuthorNameIsNull()
+    {
+        var repositoryMock = Substitute.For<IRepository<BlogPost>>();
+        var blogPost = new BlogPostBuilder().Build(); // Author name is null here.
+        blogPost.Id = "1";
+        repositoryMock.GetByIdAsync("1").Returns(blogPost);
+        Services.AddScoped(_ => repositoryMock);
+        Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().WithUseMultiAuthorMode(true).Build()));
+
+        var cut = Render<ShowBlogPostPage>(
+            p => p.Add(s => s.BlogPostId, "1"));
+
+        cut.FindAll("span:contains('Test Author')").ShouldBeEmpty();
+        cut.FindAll("i.user-tie").ShouldBeEmpty();
+    }
+
     private class PageTitleStub : ComponentBase
     {
         [Parameter]

@@ -15,11 +15,17 @@ public sealed partial class BlogPostPublisher : IJob
     private readonly ILogger<BlogPostPublisher> logger;
     private readonly IRepository<BlogPost> repository;
     private readonly ICacheInvalidator cacheInvalidator;
+    private readonly TimeProvider timeProvider;
 
-    public BlogPostPublisher(IRepository<BlogPost> repository, ICacheInvalidator cacheInvalidator, ILogger<BlogPostPublisher> logger)
+    public BlogPostPublisher(
+        IRepository<BlogPost> repository,
+        ICacheInvalidator cacheInvalidator,
+        TimeProvider timeProvider,
+        ILogger<BlogPostPublisher> logger)
     {
         this.repository = repository;
         this.cacheInvalidator = cacheInvalidator;
+        this.timeProvider = timeProvider;
         this.logger = logger;
     }
 
@@ -47,7 +53,7 @@ public sealed partial class BlogPostPublisher : IJob
 
         if (blogPostsToPublish.Count > 0)
         {
-            cacheInvalidator.Cancel();
+            await cacheInvalidator.ClearCacheAsync();
         }
 
         return blogPostsToPublish.Count;
@@ -55,7 +61,7 @@ public sealed partial class BlogPostPublisher : IJob
 
     private async Task<IPagedList<BlogPost>> GetScheduledBlogPostsAsync()
     {
-        var now = DateTime.UtcNow;
+        var now = timeProvider.GetUtcNow().DateTime;
         var scheduledBlogPosts = await repository.GetAllAsync(
             filter: b => b.ScheduledPublishDate != null && b.ScheduledPublishDate <= now);
 

@@ -1,11 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using LinkDotNet.Blog.Domain;
-using LinkDotNet.Blog.Infrastructure.Persistence.Sql;
 using LinkDotNet.Blog.Web.Features.Services;
-using Microsoft.EntityFrameworkCore;
 
 namespace LinkDotNet.Blog.Web.Features.Bookmarks;
 
@@ -55,7 +51,7 @@ public class BookmarkService : IBookmarkService
 
     private async Task InitializeIfNotExists()
     {
-        if (!(await localStorageService.ContainsKeyAsync("bookmarks")))
+        if (!await localStorageService.ContainsKeyAsync("bookmarks"))
         {
             await localStorageService.SetItemAsync("bookmarks", new List<string>());
         }

@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using LinkDotNet.Blog.Domain;
 using Markdig;
 using Markdig.Extensions.AutoIdentifiers;
 using Markdig.Renderers.Html;
@@ -12,19 +14,62 @@ namespace LinkDotNet.Blog.Web.Features;
 
 public static class MarkdownConverter
 {
-    private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder()
-        .UseAdvancedExtensions()
-        .UseAutoIdentifiers(AutoIdentifierOptions.GitHub)
-        .UseEmojiAndSmiley()
-        .UseBootstrap()
-        .UseCopyCodeBlock()
-        .Build();
+    private static readonly MarkdownPipeline MarkdownPipeline = CreatePipeline(showCodeBlockLanguage: false);
+    private static readonly MarkdownPipeline MarkdownPipelineWithCodeBlockLanguage = CreatePipeline(showCodeBlockLanguage: true);
 
     public static MarkupString ToMarkupString(string markdown)
     {
         return string.IsNullOrEmpty(markdown)
             ? default
             : (MarkupString)Markdown.ToHtml(markdown, MarkdownPipeline);
+    }
+
+    public static MarkupString ToMarkupStringWithHeadingAnchors(string markdown, string currentUri, bool showCodeBlockLanguage = false)
+    {
+        ArgumentNullException.ThrowIfNull(currentUri);
+
+        if (string.IsNullOrEmpty(markdown))
+        {
+            return default;
+        }
+
+        var pipeline = showCodeBlockLanguage ? MarkdownPipelineWithCodeBlockLanguage : MarkdownPipeline;
+        var document = Markdown.Parse(markdown, pipeline);
+        // Blazor resolves a bare "#anchor" against the base href (the home page), so the link needs the full page URL
+        var pageUri = currentUri.Split('#')[0];
+
+        foreach (var heading in document.Descendants<HeadingBlock>().ToList())
+        {
+            var id = heading.GetAttributes().Id;
+            if (heading.Inline is null || string.IsNullOrEmpty(id))
+            {
+                continue;
+            }
+
+            var anchor = new LinkInline($"{pageUri}#{id}", string.Empty);
+            anchor.AppendChild(new LiteralInline("#"));
+            var attributes = anchor.GetAttributes();
+            attributes.AddClass("heading-anchor ms-3 fg-secondary text-decoration-none");
+            attributes.AddProperty("title", "Copy link to this section");
+            attributes.AddProperty("onclick", "navigator.clipboard?.writeText(this.href)");
+            attributes.AddProperty("aria-label", "Link to this section");
+            heading.Inline.AppendChild(anchor);
+        }
+
+        return (MarkupString)document.ToHtml(pipeline);
+    }
+
+    public static string ExpandShortCodes(string content, IEnumerable<ShortCode> shortCodes)
+    {
+        ArgumentNullException.ThrowIfNull(shortCodes);
+
+        var sb = new StringBuilder(content);
+        foreach (var shortCode in shortCodes)
+        {
+            sb.Replace($"[[{shortCode.Name}]]", shortCode.MarkdownContent);
+        }
+
+        return sb.ToString();
     }
 
     public static string? ToPlainString(string markdown)
@@ -49,6 +94,18 @@ public static class MarkdownConverter
             })
             .ToArray();
     }
+
+    private static MarkdownPipeline CreatePipeline(bool showCodeBlockLanguage) => new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions()
+        .UseAutoIdentifiers(AutoIdentifierOptions.GitHub)
+        .UseEmojiAndSmiley()
+        .UseBootstrap()
+        .UseCopyCodeBlock(showCodeBlockLanguage)
+        .UseCallouts()
+        .UseLazyLoadImages()
+        .UseExternalLinks()
+        .UseResponsiveTables()
+        .Build();
 
     private static string InlineToString(ContainerInline? inline)
     {
@@ -85,6 +142,8 @@ public static class MarkdownConverter
                         break;
                     case HtmlEntityInline htmlEntity:
                         stringBuilder.Append(htmlEntity.Transcoded);
+                        break;
+                    case HtmlInline:
                         break;
                     default:
                         stringBuilder.Append(current);

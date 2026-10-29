@@ -1,24 +1,28 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
-        <AssemblyName>LinkDotNet.Blog.Infrastructure</AssemblyName>
-        <RootNamespace>LinkDotNet.Blog.Infrastructure</RootNamespace>
-			  <Nullable>enable</Nullable>
-    </PropertyGroup>
+	<PropertyGroup>
+		<AssemblyName>LinkDotNet.Blog.Infrastructure</AssemblyName>
+		<RootNamespace>LinkDotNet.Blog.Infrastructure</RootNamespace>
+	</PropertyGroup>
 
-    <ItemGroup>
-      <PackageReference Include="Microsoft.EntityFrameworkCore" />
-	    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"  />
-	    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
-      <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
-      <PackageReference Include="MongoDB.Driver" />
-			<PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL"/>
-      <PackageReference Include="RavenDB.Client" />
-    </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="LinkDotNet.Enumeration">
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"  />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+		<PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+		<PackageReference Include="Microting.EntityFrameworkCore.MySql" />
+		<PackageReference Include="MongoDB.Driver" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL"/>
+		<PackageReference Include="RavenDB.Client" />
+    <PackageReference Include="ZiggyCreatures.FusionCache.Locking.AsyncKeyed" />
+	</ItemGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\LinkDotNet.Blog.Domain\LinkDotNet.Blog.Domain.csproj" />
-    </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\LinkDotNet.Blog.Domain\LinkDotNet.Blog.Domain.csproj" />
+	</ItemGroup>
+
 </Project>

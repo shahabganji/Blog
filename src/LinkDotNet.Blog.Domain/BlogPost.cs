@@ -36,16 +36,20 @@ public sealed partial class BlogPost : Entity
 
     public int ReadingTimeInMinutes { get; private set; }
 
-    public string Slug => GenerateSlug();
+    public string Slug => CreateSlug(Title);
 
-    private string GenerateSlug()
+    public string? AuthorName { get; private set; }
+
+    public static string CreateSlug(string title)
     {
-        if (string.IsNullOrWhiteSpace(Title))
+        ArgumentNullException.ThrowIfNull(title);
+
+        if (string.IsNullOrWhiteSpace(title))
         {
-            return Title;
+            return title;
         }
 
-        var normalizedTitle = Title.Normalize(NormalizationForm.FormD);
+        var normalizedTitle = title.Normalize(NormalizationForm.FormD);
         var stringBuilder = new StringBuilder();
 
         foreach (var c in normalizedTitle.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark))
@@ -92,7 +96,8 @@ public sealed partial class BlogPost : Entity
         DateTime? updatedDate = null,
         DateTime? scheduledPublishDate = null,
         IEnumerable<string>? tags = null,
-        string? previewImageUrlFallback = null)
+        string? previewImageUrlFallback = null,
+        string? authorName = null)
     {
         if (scheduledPublishDate is not null && isPublished)
         {
@@ -113,6 +118,7 @@ public sealed partial class BlogPost : Entity
             IsPublished = isPublished,
             Tags = tags?.Select(t => t.Trim()).ToImmutableArray() ?? [],
             ReadingTimeInMinutes = ReadingTimeCalculator.CalculateReadingTime(content),
+            AuthorName = authorName
         };
 
         return blogPost;
@@ -143,5 +149,6 @@ public sealed partial class BlogPost : Entity
         IsPublished = from.IsPublished;
         Tags = from.Tags;
         ReadingTimeInMinutes = from.ReadingTimeInMinutes;
+        AuthorName = from.AuthorName;
     }
 }

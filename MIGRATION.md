@@ -1,5 +1,126 @@
-# Migration Guide
+﻿# Migration Guide
 This document describes the changes that need to be made to migrate from one version of the blog to another.
+
+## Automated Upgrade Assistant
+
+Starting with version 12.0, we provide an **Upgrade Assistant** tool that automates most configuration migrations. This tool:
+- Automatically detects your current configuration version
+- Applies necessary transformations to `appsettings.json` files
+- Creates backups before making changes
+- Provides colorful console output with clear warnings and instructions
+
+**Usage:**
+```bash
+# From your blog directory
+dotnet run --project tools/LinkDotNet.Blog.UpgradeAssistant
+
+# Preview changes without applying
+dotnet run --project tools/LinkDotNet.Blog.UpgradeAssistant -- --dry-run
+
+# See all options
+dotnet run --project tools/LinkDotNet.Blog.UpgradeAssistant -- --help
+```
+
+For detailed documentation, see [docs/Migrations/UpgradeAssistant.md](docs/Migrations/UpgradeAssistant.md).
+
+**Note:** While the Upgrade Assistant handles most configuration changes automatically, some migrations still require manual steps (especially database schema changes). These are noted below.
+
+---
+
+## 16.0 to 17.0
+
+### Markdown for LLMs
+Blog posts can be served as markdown to LLMs and agents that request them with `Accept: text/markdown`. The `EnableMarkdownForLlms` setting was added on the root level of the `appsettings.json` file (handled by the Upgrade Assistant). The default is `false`, set it to `true` to enable it. See [Markdown for LLMs](docs/Setup/Configuration.md#markdown-for-llms) for details.
+
+```json
+{
+  ...
+  "EnableMarkdownForLlms": false
+}
+```
+
+## 15.0 to 16.0
+
+### Blog post record index
+
+The index on `BlogPostRecords` was replaced. Both queries that read this table (the dashboard visit counter and `TransformBlogPostRecordsJob`) filter on `DateClicked` only, but the old index led with `BlogPostId` and could therefore never be seeked. The replacement leads with `DateClicked` and carries `BlogPostId` and `Clicks`, which makes the dashboard's `GROUP BY BlogPostId, SUM(Clicks)` index-only.
+
+For SQL providers, run the `ChangeBlogPostRecordIndex` Entity Framework migration, or execute `scripts/2026-09-13-BlogPostRecordIndex.sql` (SQL Server, includes an optional `__EFMigrationsHistory` baseline). The portable equivalent is:
+
+```sql
+DROP INDEX IX_BlogPostRecords_BlogPostId_DateClicked ON BlogPostRecords;
+CREATE INDEX IX_BlogPostRecords_DateClicked_BlogPostId_Clicks
+    ON BlogPostRecords (DateClicked, BlogPostId, Clicks);
+```
+
+> **The `DROP` may fail because the old index does not exist.** That is expected on most installations, and safe to ignore. `BlogDbContext` bootstraps its schema with `Database.EnsureCreated()`, which only acts on an empty database and never writes `__EFMigrationsHistory`. On a database that already had tables when it was first started, no Entity Framework migration has ever been applied — including `AddBlogPostRecordIndex`, which introduced the old index. Check what you actually have with `EXEC sp_helpindex 'BlogPostRecords'` before running anything.
+
+### Visit counts are no longer double-counted
+
+`ShowBlogPostPage` recorded a visit on every render rather than only the first, so each page view was counted at least twice. This is now fixed. Expect the numbers on the dashboard to drop by roughly half from the upgrade date onward — that is the correction, not a drop in traffic. Historical data is left untouched and is not comparable with data recorded after the upgrade.
+
+### Code block language
+Code blocks now have a header that contains the copy button and, optionally, the language of the code block. The `ShowCodeBlockLanguage` setting was added on the root level of the `appsettings.json` file (handled by the Upgrade Assistant). The default is `true`, set it to `false` to hide the language.
+
+```json
+{
+  ...
+  "ShowCodeBlockLanguage": true
+}
+```
+
+## 14.0 to 15.0
+
+### Broken link checker
+A new `BrokenLinks` table is introduced to store the results of the broken link checker. For SQL providers, run the `AddBrokenLinks` Entity Framework migration or execute the following script:
+
+```sql
+CREATE TABLE BrokenLinks
+(
+	Id [VARCHAR](900) NOT NULL,
+	BlogPostId [NVARCHAR](256) NOT NULL,
+	BlogPostTitle [NVARCHAR](256) NOT NULL,
+	Url NVARCHAR(MAX) NOT NULL,
+	Reason [NVARCHAR](1024) NOT NULL,
+	CheckedDate DATETIME2 NOT NULL,
+)
+
+ALTER TABLE BrokenLinks
+ADD CONSTRAINT PK_BrokenLinks PRIMARY KEY (Id)
+```
+
+The `EnableBrokenLinkChecker` setting was added on the root level of the `appsettings.json` file (handled by the Upgrade Assistant). The default is `true`, set it to `false` to turn the checker off.
+
+```json
+{
+  ...
+  "EnableBrokenLinkChecker": true
+}
+```
+
+## 12.0 to 13.0
+`EnableTagDiscoveryPanel` setting was added on the root level of the `appsettings.json` file. This setting controls whether the Tag Discovery panel is shown in the navigation bar.
+
+```json
+{
+  ...
+  "EnableTagDiscoveryPanel": true
+}
+```
+
+## 11.0 to 12.0
+`ShowBuildInformation` setting was added on the root level of the `appsettings.json` file. This setting controls whether build information (like build date) is shown in the `Footer` component.
+
+```json
+{
+  ...
+  "ShowBuildInformation": true
+}
+```
+
+## 9.0 to 11.0
+
+A new config has been added `UseMultiAuthorMode` in `appsettings.json`. The default value of this config is `false`. If set to `true` then author name will be associated with blog posts at the time of creation.
 
 ## 8.0 to 9.0
 

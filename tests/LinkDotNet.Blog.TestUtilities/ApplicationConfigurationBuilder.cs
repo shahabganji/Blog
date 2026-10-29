@@ -14,7 +14,12 @@ public class ApplicationConfigurationBuilder
     private bool isDisqusEnabled;
     private bool showReadingIndicator;
     private bool showSimilarPosts;
+    private bool showBuildInformation = true;
     private string? blogBrandUrl;
+    private bool useMultiAuthorMode;
+    private bool enableBrokenLinkChecker = true;
+    private bool showCodeBlockLanguage = true;
+    private bool enableMarkdownForLlms;
 
     public ApplicationConfigurationBuilder WithBlogName(string blogName)
     {
@@ -75,13 +80,43 @@ public class ApplicationConfigurationBuilder
         this.showSimilarPosts = showSimilarPosts;
         return this;
     }
+
+    public ApplicationConfigurationBuilder WithShowBuildInformation(bool showBuildInformation)
+    {
+        this.showBuildInformation = showBuildInformation;
+        return this;
+    }
     
     public ApplicationConfigurationBuilder WithBlogBrandUrl(string? blogBrandUrl)
     {
         this.blogBrandUrl = blogBrandUrl;
         return this;
     }
-    
+
+    public ApplicationConfigurationBuilder WithUseMultiAuthorMode(bool useMultiAuthorMode)
+    {
+        this.useMultiAuthorMode = useMultiAuthorMode;
+        return this;
+    }
+
+    public ApplicationConfigurationBuilder WithEnableBrokenLinkChecker(bool enableBrokenLinkChecker)
+    {
+        this.enableBrokenLinkChecker = enableBrokenLinkChecker;
+        return this;
+    }
+
+    public ApplicationConfigurationBuilder WithShowCodeBlockLanguage(bool showCodeBlockLanguage)
+    {
+        this.showCodeBlockLanguage = showCodeBlockLanguage;
+        return this;
+    }
+
+    public ApplicationConfigurationBuilder WithEnableMarkdownForLlms(bool enableMarkdownForLlms)
+    {
+        this.enableMarkdownForLlms = enableMarkdownForLlms;
+        return this;
+    }
+
     public ApplicationConfiguration Build()
     {
         return new ApplicationConfiguration
@@ -96,7 +131,12 @@ public class ApplicationConfigurationBuilder
             IsDisqusEnabled = isDisqusEnabled,
             ShowReadingIndicator = showReadingIndicator,
             ShowSimilarPosts = showSimilarPosts,
+            ShowBuildInformation = showBuildInformation,
             BlogBrandUrl = blogBrandUrl,
+            UseMultiAuthorMode = useMultiAuthorMode,
+            EnableBrokenLinkChecker = enableBrokenLinkChecker,
+            ShowCodeBlockLanguage = showCodeBlockLanguage,
+            EnableMarkdownForLlms = enableMarkdownForLlms,
         };
     }
 }

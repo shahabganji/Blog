@@ -10,7 +10,7 @@ public static partial class ReadingTimeCalculator
         const double wordsPerMinute = 250;
         const double minutesPerImage = 0.5;
 
-        var imageCount = ImageRegex().Matches(content).Count;
+        var imageCount = ImageRegex().Count(content);
 
         var wordCount = GetWordCount(content) - imageCount;
         var readTimeWords = wordCount / wordsPerMinute;

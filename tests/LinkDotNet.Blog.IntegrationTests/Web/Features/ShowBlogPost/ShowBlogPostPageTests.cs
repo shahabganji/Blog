@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using Blazored.Toast.Services;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.Infrastructure;
@@ -7,8 +7,10 @@ using LinkDotNet.Blog.TestUtilities;
 using LinkDotNet.Blog.Web.Features.Bookmarks;
 using LinkDotNet.Blog.Web.Features.Components;
 using LinkDotNet.Blog.Web.Features.Services;
+using LinkDotNet.Blog.Web.Features.Services.Tags;
 using LinkDotNet.Blog.Web.Features.ShowBlogPost;
 using LinkDotNet.Blog.Web.Features.ShowBlogPost.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,7 +36,7 @@ public class ShowBlogPostPageTests : SqlDatabaseTestBase<BlogPost>
         var likeComponent = cut.FindComponent<Like>();
         likeComponent.Render(c => c.Add(p => p.BlogPost, publishedPost));
 
-        likeComponent.Find("span").Click();
+        await likeComponent.Find("span").ClickAsync();
 
         var fromDb = await DbContext.BlogPosts.AsNoTracking().SingleAsync(d => d.Id == publishedPost.Id, TestContext.Current.CancellationToken);
         fromDb.Likes.ShouldBe(3);
@@ -58,7 +60,7 @@ public class ShowBlogPostPageTests : SqlDatabaseTestBase<BlogPost>
         var likeComponent = cut.FindComponent<Like>();
         likeComponent.Render(c => c.Add(p => p.BlogPost, publishedPost));
 
-        likeComponent.Find("span").Click();
+        await likeComponent.Find("span").ClickAsync();
 
         var fromDb = await DbContext.BlogPosts.AsNoTracking().SingleAsync(d => d.Id == publishedPost.Id, TestContext.Current.CancellationToken);
         fromDb.Likes.ShouldBe(1);
@@ -138,14 +140,84 @@ public class ShowBlogPostPageTests : SqlDatabaseTestBase<BlogPost>
         cut.Find(".blogpost-content > p").TextContent.ShouldBe("This is a Content shortcode");
     }
 
-    private void RegisterComponents(BunitContext ctx, ILocalStorageService? localStorageService = null)
+    [Fact]
+    public async Task ShouldShowAuthorNameWhenUseMultiAuthorModeIsTrue()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        ctx.AddAuthorization();
+        RegisterComponents(ctx, useMultiAuthorMode: true);
+        var blogPost = new BlogPostBuilder().WithAuthorName("Test Author").IsPublished().Build();
+        await Repository.StoreAsync(blogPost);
+
+        var cut = ctx.Render<ShowBlogPostPage>(
+            p => p.Add(b => b.BlogPostId, blogPost.Id));
+
+        cut.FindAll("span:contains('Test Author')").ShouldHaveSingleItem();
+        cut.FindAll("i.user-tie").ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task ShouldNotShowAuthorNameWhenUseMultiAuthorModeIsFalse()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        ctx.AddAuthorization();
+        RegisterComponents(ctx, useMultiAuthorMode: false);
+        var blogPost = new BlogPostBuilder().WithAuthorName("Test Author").IsPublished().Build();
+        await Repository.StoreAsync(blogPost);
+
+        var cut = ctx.Render<ShowBlogPostPage>(
+            p => p.Add(b => b.BlogPostId, blogPost.Id));
+
+        cut.FindAll("span:contains('Test Author')").ShouldBeEmpty();
+        cut.FindAll("i.user-tie").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ShouldNotShowAuthorNameWhenAuthorNameIsNull()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        ctx.AddAuthorization();
+        RegisterComponents(ctx, useMultiAuthorMode: true);
+        var blogPost = new BlogPostBuilder().IsPublished().Build(); // Author name is null here.
+        await Repository.StoreAsync(blogPost);
+
+        var cut = ctx.Render<ShowBlogPostPage>(
+            p => p.Add(b => b.BlogPostId, blogPost.Id));
+
+        cut.FindAll("span:contains('Test Author')").ShouldBeEmpty();
+        cut.FindAll("i.user-tie").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ShouldRenderHeadingAnchorsWithFullPageUrl()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        ctx.AddAuthorization();
+        RegisterComponents(ctx);
+        var blogPost = new BlogPostBuilder().WithContent("## My Heading").IsPublished().Build();
+        await Repository.StoreAsync(blogPost);
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo($"blogPost/{blogPost.Id}#other");
+
+        var cut = ctx.Render<ShowBlogPostPage>(
+            p => p.Add(b => b.BlogPostId, blogPost.Id));
+
+        cut.Find(".blogpost-content h2 .heading-anchor").GetAttribute("href")
+            .ShouldBe($"http://localhost/blogPost/{blogPost.Id}#my-heading");
+    }
+
+    private void RegisterComponents(BunitContext ctx, ILocalStorageService? localStorageService = null, bool useMultiAuthorMode = false)
     {
         ctx.Services.AddScoped(_ => Repository);
         ctx.Services.AddScoped(_ => localStorageService ?? Substitute.For<ILocalStorageService>());
         ctx.Services.AddScoped(_ => Substitute.For<IToastService>());
         ctx.Services.AddScoped(_ => Substitute.For<IUserRecordService>());
-        ctx.Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().Build()));
+        ctx.Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().WithUseMultiAuthorMode(useMultiAuthorMode).Build()));
         ctx.Services.AddScoped(_ => Substitute.For<IInstantJobRegistry>());
+        ctx.Services.AddScoped(_ => Substitute.For<ITagQueryService>());
         var shortCodeRepository = Substitute.For<IRepository<ShortCode>>();
         shortCodeRepository.GetAllAsync().Returns(PagedList<ShortCode>.Empty);
         ctx.Services.AddScoped(_ => shortCodeRepository);

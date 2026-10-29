@@ -4,17 +4,19 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace LinkDotNet.Blog.Web.Authentication.OpenIdConnect;
 
 public static class AuthExtensions
 {
-    public static void UseAuthentication(this IServiceCollection services)
+    public static void UseAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
-        using var provider = services.BuildServiceProvider();
-        var authInformation = provider.GetRequiredService<IOptions<AuthInformation>>();
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var authInformation = configuration.GetSection(AuthInformation.AuthInformationSection).Get<AuthInformation>()
+            ?? throw new InvalidOperationException("Authentication configuration is missing.");
 
         services.Configure<CookiePolicyOptions>(options =>
         {
@@ -29,27 +31,28 @@ public static class AuthExtensions
             options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         })
         .AddCookie()
-        .AddOpenIdConnect(authInformation.Value.Provider, options =>
+        .AddOpenIdConnect(authInformation.Provider, options =>
         {
-            options.Authority = $"https://{authInformation.Value.Domain}";
-            options.ClientId = authInformation.Value.ClientId;
-            options.ClientSecret = authInformation.Value.ClientSecret;
+            options.Authority = $"https://{authInformation.Domain}";
+            options.ClientId = authInformation.ClientId;
+            options.ClientSecret = authInformation.ClientSecret;
 
             options.ResponseType = "code";
 
             options.Scope.Clear();
             options.Scope.Add("openid");
+            options.Scope.Add("profile");
 
             // Set the callback path, so Auth provider will call back to http://localhost:1234/callback
             // Also ensure that you have added the URL as an Allowed Callback URL in your Auth provider dashboard
             options.CallbackPath = new PathString("/callback");
 
             // Configure the Claims Issuer to be Auth provider
-            options.ClaimsIssuer = authInformation.Value.Provider;
+            options.ClaimsIssuer = authInformation.Provider;
 
             options.Events = new OpenIdConnectEvents
             {
-                OnRedirectToIdentityProviderForSignOut = async context => await HandleRedirect(authInformation.Value, context),
+                OnRedirectToIdentityProviderForSignOut = async context => await HandleRedirect(authInformation, context),
             };
         });
 

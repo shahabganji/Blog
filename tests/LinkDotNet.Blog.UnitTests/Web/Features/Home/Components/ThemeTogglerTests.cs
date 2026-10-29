@@ -13,7 +13,7 @@ public class ThemeTogglerTests : BunitContext
         Services.AddScoped(_ => Substitute.For<ILocalStorageService>());
         JSInterop.SetupModule("./Features/Home/Components/ThemeToggler.razor.js");
         JSInterop.Setup<string>("getCurrentSystemPreference").SetResult("dark");
-        var setTheme = JSInterop.SetupVoid("setTheme", "dark");
+        var setTheme = JSInterop.SetupVoid("setTheme", "dark", false);
 
         Render<ThemeToggler>();
 
@@ -29,7 +29,7 @@ public class ThemeTogglerTests : BunitContext
         Services.AddScoped(_ => localStorage);
         JSInterop.SetupModule("./Features/Home/Components/ThemeToggler.razor.js");
         JSInterop.Setup<string>("getCurrentSystemPreference").SetResult("light");
-        var setTheme = JSInterop.SetupVoid("setTheme", "dark");
+        var setTheme = JSInterop.SetupVoid("setTheme", "dark", true);
 
         Render<ThemeToggler>();
 
@@ -43,12 +43,12 @@ public class ThemeTogglerTests : BunitContext
         Services.AddScoped(_ => localStorage);
         JSInterop.SetupModule("./Features/Home/Components/ThemeToggler.razor.js");
         JSInterop.Setup<string>("getCurrentSystemPreference").SetResult("light");
-        JSInterop.SetupVoid("setTheme", "light");
-        var setTheme = JSInterop.SetupVoid("setTheme", "dark")
+        JSInterop.SetupVoid("setTheme", "light", false);
+        var setTheme = JSInterop.SetupVoid("setTheme", "dark", true)
             .SetVoidResult();
         var cut = Render<ThemeToggler>();
 
-        cut.Find("div").Click();
+        await cut.Find("div").ClickAsync();
 
         setTheme.Invocations.ShouldNotBeNull().ShouldNotBeEmpty();
         await localStorage.Received(1).SetItemAsync("preferred-theme", "dark");

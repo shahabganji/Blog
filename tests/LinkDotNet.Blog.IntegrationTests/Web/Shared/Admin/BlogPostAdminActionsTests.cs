@@ -3,20 +3,28 @@ using AngleSharp.Html.Dom;
 using Blazored.Toast.Services;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.Infrastructure.Persistence;
+using LinkDotNet.Blog.Web.Features.Services.Tags;
 using LinkDotNet.Blog.Web.Features.ShowBlogPost.Components;
 using Microsoft.Extensions.DependencyInjection;
 using NCronJob;
+using LinkDotNet.Blog.TestUtilities;
 
 namespace LinkDotNet.Blog.IntegrationTests.Web.Shared.Admin;
 
 public class BlogPostAdminActionsTests : BunitContext
 {
+    private readonly BunitJSModuleInterop nativeDialog;
+    private readonly ITagQueryService tagQueryService = Substitute.For<ITagQueryService>();
+
     public BlogPostAdminActionsTests()
     {
         Services.AddSingleton(Substitute.For<IRepository<BlogPost>>());
         Services.AddSingleton(Substitute.For<IToastService>());
         Services.AddSingleton(Substitute.For<IInstantJobRegistry>());
+        tagQueryService.ClearTagCacheAsync().Returns(Task.CompletedTask);
+        Services.AddSingleton(tagQueryService);
         AddAuthorization().SetAuthorized("s");
+        nativeDialog = JSInterop.SetupNativeDialog();
     }
     
     [Fact]
@@ -27,11 +35,33 @@ public class BlogPostAdminActionsTests : BunitContext
         Services.AddSingleton(repositoryMock);
         
         var cut = Render<BlogPostAdminActions>(s => s.Add(p => p.BlogPostId, blogPostId));
-        cut.Find("#delete-blogpost").Click();
+        await cut.Find("#delete-blogpost").ClickAsync();
 
-        cut.Find("#ok").Click();
+        await cut.Find("#ok").ClickAsync();
 
         await repositoryMock.Received(1).DeleteAsync(blogPostId);
+    }
+
+    [Fact]
+    public async Task ShouldShowConfirmDialogWhenDeleteClicked()
+    {
+        var cut = Render<BlogPostAdminActions>(s => s.Add(p => p.BlogPostId, "2"));
+
+        await cut.Find("#delete-blogpost").ClickAsync();
+
+        nativeDialog.VerifyInvoke("show");
+    }
+
+    [Fact]
+    public async Task ShouldClearTagCacheWhenBlogPostIsDeleted()
+    {
+        const string blogPostId = "2";
+        var cut = Render<BlogPostAdminActions>(s => s.Add(p => p.BlogPostId, blogPostId));
+        await cut.Find("#delete-blogpost").ClickAsync();
+
+        await cut.Find("#ok").ClickAsync();
+
+        await tagQueryService.Received(1).ClearTagCacheAsync();
     }
 
     [Fact]
@@ -42,9 +72,9 @@ public class BlogPostAdminActionsTests : BunitContext
         
         Services.AddSingleton(repositoryMock);
         var cut = Render<BlogPostAdminActions>(s => s.Add(p => p.BlogPostId, blogPostId));
-        cut.Find("#delete-blogpost").Click();
+        await cut.Find("#delete-blogpost").ClickAsync();
 
-        cut.Find("#cancel").Click();
+        await cut.Find("#cancel").ClickAsync();
 
         await repositoryMock.Received(0).DeleteAsync(blogPostId);
     }

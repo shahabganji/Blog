@@ -3,8 +3,14 @@ name: dotnet
 on:
   push:
     branches: [ master ]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   pull_request:
     branches: [ master ]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
 
 concurrency:
   group: dotnet-${{ github.ref }}-1
@@ -20,16 +26,15 @@ jobs:
         os: [ ubuntu-latest, ubuntu-24.04-arm, macos-latest ]
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v7
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: |
-          8.0.x
-          9.0.x
+          10.0.x
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
       run: dotnet build --no-restore -c Release
     - name: Test
-      run: dotnet test -c Release --no-build -p:VSTestUseMSBuildOutput=false
+      run: dotnet test -c Release --no-build

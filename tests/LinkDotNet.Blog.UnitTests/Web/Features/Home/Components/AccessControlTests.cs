@@ -1,19 +1,44 @@
-﻿using AngleSharp.Html.Dom;
+using System.Linq;
+using AngleSharp.Html.Dom;
+using LinkDotNet.Blog.Web;
 using LinkDotNet.Blog.Web.Features.Home.Components;
+using LinkDotNet.Blog.Web.Features.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace LinkDotNet.Blog.UnitTests.Web.Features.Home.Components;
 
 public class AccessControlTests : BunitContext
 {
+    private readonly IOptions<ApplicationConfiguration> options;
+
+    public AccessControlTests()
+    {
+        options = Substitute.For<IOptions<ApplicationConfiguration>>();
+
+        options.Value.Returns(new ApplicationConfiguration()
+        {
+            UseMultiAuthorMode = true,
+            BlogName = "Test",
+            ConnectionString = "Test",
+            DatabaseName = "Test"
+        });
+
+        Services.AddScoped(_ => options);
+
+        var currentUserService = Substitute.For<ICurrentUserService>();
+        currentUserService.GetDisplayNameAsync().Returns("Test Author");
+        Services.AddScoped(_ => currentUserService);
+    }
+
     [Fact]
-    public void ShouldShowLoginAndHideAdminWhenNotLoggedIn()
+    public void ShouldRenderNothingWhenNotLoggedIn()
     {
         AddAuthorization();
 
         var cut = Render<AccessControl>();
 
-        cut.FindAll("a:contains('Admin')").ShouldBeEmpty();
-        cut.FindAll("a:contains('Log in')").ShouldHaveSingleItem();
+        cut.FindAll("a").ShouldBeEmpty();
     }
 
     [Fact]
@@ -27,16 +52,23 @@ public class AccessControlTests : BunitContext
         cut.FindAll("a:contains('Log out')").ShouldHaveSingleItem();
     }
 
-    [Fact]
-    public void LoginShouldHaveCurrentUriAsRedirectUri()
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public void ShouldShowBrokenLinksOnlyWhenCheckerIsEnabled(bool enableBrokenLinkChecker, int expectedLinks)
     {
-        const string currentUri = "http://localhost/test";
-        AddAuthorization();
+        options.Value.Returns(new ApplicationConfiguration()
+        {
+            EnableBrokenLinkChecker = enableBrokenLinkChecker,
+            BlogName = "Test",
+            ConnectionString = "Test",
+            DatabaseName = "Test"
+        });
+        AddAuthorization().SetAuthorized("steven");
 
-        var cut = Render<AccessControl>(
-            p => p.Add(s => s.CurrentUri, currentUri));
+        var cut = Render<AccessControl>();
 
-        ((IHtmlAnchorElement)cut.Find("a:contains('Log in')")).Href.ShouldContain(currentUri);
+        cut.FindAll("a[href='broken-links']").Count.ShouldBe(expectedLinks);
     }
 
     [Fact]
@@ -49,5 +81,57 @@ public class AccessControlTests : BunitContext
             p => p.Add(s => s.CurrentUri, currentUri));
 
         ((IHtmlAnchorElement)cut.Find("a:contains('Log out')")).Href.ShouldContain(currentUri);
+    }
+
+    [Fact]
+    public void ShouldShowAuthorNameWhenUseMultiAuthorModeIsEnabled()
+    {
+        options.Value.Returns(new ApplicationConfiguration()
+        {
+            UseMultiAuthorMode = true,
+            BlogName = "Test",
+            ConnectionString = "Test",
+            DatabaseName = "Test"
+        });
+
+        AddAuthorization().SetAuthorized("steven");
+
+        var cut = Render<AccessControl>();
+
+        cut.FindAll("a:contains('Test Author')").ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void ShouldHaveUniqueIdsAndMatchingLabelsForDropdowns()
+    {
+        AddAuthorization().SetAuthorized("steven");
+
+        var cut = Render<AccessControl>();
+
+        var toggles = cut.FindAll("[data-bs-toggle='menu']");
+        toggles.Count.ShouldBe(2);
+        toggles.Select(t => t.Id).Distinct().Count().ShouldBe(2);
+        foreach (var toggle in toggles)
+        {
+            cut.FindAll($"div.menu[aria-labelledby='{toggle.Id}']").ShouldHaveSingleItem();
+        }
+    }
+
+    [Fact]
+    public void ShouldHideAuthorNameWhenUseMultiAuthorModeIsDisabled()
+    {
+        options.Value.Returns(new ApplicationConfiguration()
+        {
+            UseMultiAuthorMode = false,
+            BlogName = "Test",
+            ConnectionString = "Test",
+            DatabaseName = "Test"
+        });
+
+        AddAuthorization().SetAuthorized("steven");
+
+        var cut = Render<AccessControl>();
+
+        cut.FindAll("a:contains('Test Author')").ShouldBeEmpty();
     }
 }

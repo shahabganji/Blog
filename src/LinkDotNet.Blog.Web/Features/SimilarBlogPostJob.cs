@@ -7,7 +7,6 @@ using NCronJob;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.Infrastructure.Persistence;
 using LinkDotNet.Blog.Web.Features.Services.Similiarity;
-using Microsoft.Extensions.Options;
 
 namespace LinkDotNet.Blog.Web.Features;
 
@@ -15,28 +14,18 @@ public class SimilarBlogPostJob : IJob
 {
     private readonly IRepository<BlogPost> blogPostRepository;
     private readonly IRepository<SimilarBlogPost> similarBlogPostRepository;
-    private readonly bool showSimilarPosts;
 
     public SimilarBlogPostJob(
         IRepository<BlogPost> blogPostRepository,
-        IRepository<SimilarBlogPost> similarBlogPostRepository,
-        IOptions<ApplicationConfiguration> applicationConfiguration)
+        IRepository<SimilarBlogPost> similarBlogPostRepository)
     {
-        ArgumentNullException.ThrowIfNull(applicationConfiguration);
-
         this.blogPostRepository = blogPostRepository;
         this.similarBlogPostRepository = similarBlogPostRepository;
-        showSimilarPosts = applicationConfiguration.Value.ShowSimilarPosts;
     }
 
     public async Task RunAsync(IJobExecutionContext context, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(context);
-
-        if (!showSimilarPosts)
-        {
-            return;
-        }
 
         var isInstantJobTriggered = context.Parameter is not null;
         var noJobPublished = context.ParentOutput is null or 0;

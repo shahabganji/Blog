@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Threading.RateLimiting;
-using Blazorise;
-using Blazorise.Bootstrap5;
 using LinkDotNet.Blog.Web.Features.Admin.BlogPostEditor.Services;
+using LinkDotNet.Blog.Web.Features.Admin.BrokenLinks.Services;
 using LinkDotNet.Blog.Web.Features.Admin.Sitemap.Services;
 using LinkDotNet.Blog.Web.Features.Bookmarks;
 using LinkDotNet.Blog.Web.Features.Services;
+using LinkDotNet.Blog.Web.Features.Services.Tags;
 using LinkDotNet.Blog.Web.RegistrationExtensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -17,6 +17,7 @@ public static class ServiceExtensions
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<ILocalStorageService, LocalStorageService>();
         services.AddScoped<ISortOrderCalculator, SortOrderCalculator>();
         services.AddScoped<IUserRecordService, UserRecordService>();
@@ -24,9 +25,16 @@ public static class ServiceExtensions
         services.AddScoped<ISitemapService, SitemapService>();
         services.AddScoped<IXmlWriter, XmlWriter>();
         services.AddScoped<IFileProcessor, FileProcessor>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ITagQueryService, TagQueryService>();
+        services.AddScoped<IBlogPostVersionService, BlogPostVersionService>();
+        services.AddHttpClient<ILinkChecker, LinkChecker>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("LinkDotNet.Blog-LinkChecker");
+        }).RemoveAllLoggers();
 
         services.AddSingleton<CacheService>();
-        services.AddSingleton<ICacheTokenProvider>(s => s.GetRequiredService<CacheService>());
         services.AddSingleton<ICacheInvalidator>(s => s.GetRequiredService<CacheService>());
 
         services.AddBackgroundServices();
@@ -50,24 +58,11 @@ public static class ServiceExtensions
         return services;
     }
 
-    public static IServiceCollection AddBlazoriseWithBootstrap(this IServiceCollection services)
-    {
-        services
-            .AddBlazorise()
-            .AddBootstrap5Providers();
-
-        return services;
-    }
-
     public static IServiceCollection AddHostingServices(this IServiceCollection services)
     {
         services.AddRazorPages();
-        services.AddServerSideBlazor(s =>
-        {
-#if DEBUG
-            s.DetailedErrors = true;
-#endif
-        });
+        services.AddRazorComponents()
+            .AddInteractiveServerComponents();
         services.AddSignalR(options =>
         {
             options.MaximumReceiveMessageSize = 1024 * 1024;

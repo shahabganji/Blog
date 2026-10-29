@@ -23,4 +23,16 @@ public sealed record ApplicationConfiguration
     public bool ShowReadingIndicator { get; init; }
 
     public bool ShowSimilarPosts { get; init; }
+
+    public bool ShowBuildInformation { get; init; } = true;
+
+    public bool UseMultiAuthorMode { get; init; }
+
+    public bool EnableTagDiscoveryPanel { get; set; }
+
+    public bool EnableBrokenLinkChecker { get; init; } = true;
+
+    public bool ShowCodeBlockLanguage { get; init; } = true;
+
+    public bool EnableMarkdownForLlms { get; init; }
 }

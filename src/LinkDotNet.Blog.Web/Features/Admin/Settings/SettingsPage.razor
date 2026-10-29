@@ -1,5 +1,6 @@
 @page "/settings"
 @using LinkDotNet.Blog.Web.Features.Services
+@using LinkDotNet.Blog.Web.Features.Admin.BrokenLinks.Services
 @using NCronJob
 @inject IOptions<ApplicationConfiguration> ApplicationConfiguration
 @inject ICacheInvalidator CacheInvalidator
@@ -11,7 +12,9 @@
 
 <div class="container">
 	<h3 class="fw-bold">Settings</h3>
-	<table class="table table-responsive table-hover">
+	<div class="table-card">
+	<div class="table-responsive">
+	<table class="table table-hover align-middle">
 		<thead>
 		<tr>
 			<th scope="col">Configuration Name</th>
@@ -22,34 +25,48 @@
 		</thead>
 		<tbody>
 		<tr>
-			<td>Cache Duration (First Page)</td>
-			<td>Defines how long the first page remains cached before a refresh is required.<br/>
-			The longer the cache lives, the longer it takes for the user to see updated content on the first page, but the faster the page loads.<br/>
-				You can manually invalidate the cache.</td>
-			<td>@ApplicationConfiguration.Value.FirstPageCacheDurationInMinutes Minutes</td>
-			<td><button class="btn btn-warning" id="invalidate-cache" @onclick="InvalidateCache">Invalidate Cache</button></td>
+			<td>Cache</td>
+			<td>Clears all cached data including the first page, sitemap, and other cached content.<br/>
+				Use this to immediately reflect changes across the blog.</td>
+			<td>-</td>
+			<td><button class="btn btn-subtle theme-primary" id="invalidate-cache" @onclick="InvalidateCacheAsync">Clear Cache</button></td>
 		</tr>
 		<tr>
 			<td>Run Visit Counter Data Collection</td>
 			<td>The visit counter data collection is a background job that collects the visit data of the blog posts.<br/>
 				The job runs every 10 minutes. The job can be run on demand.</td>
 			<td>10 Minutes</td>
-			<td><button class="btn btn-warning" id="run-visit-transformer" @onclick="RunVisitTransformer">Run Transformer</button></td>
+			<td><button class="btn btn-subtle theme-primary" id="run-visit-transformer" @onclick="RunVisitTransformer">Run Transformer</button></td>
+		</tr>
+		<tr>
+			<td>Broken Link Checker</td>
+			<td>Checks all external links of published blog posts and lists the broken ones under <a href="broken-links">Broken links</a>.<br/>
+				The job runs every day at 03:00. It can be turned off via <code>EnableBrokenLinkChecker</code> in the appsettings.json.</td>
+			<td>@(ApplicationConfiguration.Value.EnableBrokenLinkChecker ? "Enabled" : "Disabled")</td>
+			<td><button class="btn btn-subtle theme-primary" id="run-broken-link-checker" @onclick="RunBrokenLinkChecker" disabled="@(!ApplicationConfiguration.Value.EnableBrokenLinkChecker)">Run Checker</button></td>
 		</tr>
 		</tbody>
 	</table>
+	</div>
+	</div>
 </div>
 
 @code {
-	private void InvalidateCache()
+	private async Task InvalidateCacheAsync()
 	{
-		CacheInvalidator.Cancel();
-		ToastService.ShowInfo("Cache was invalidated.");
+		await CacheInvalidator.ClearCacheAsync();
+		ToastService.ShowInfo("Cache was cleared.");
 	}
 
 	private void RunVisitTransformer()
 	{
-		InstantJobRegistry.RunInstantJob<TransformBlogPostRecordsJob>();
+		InstantJobRegistry.RunInstantJob<TransformBlogPostRecordsJob>(parameter: null);
 		ToastService.ShowInfo("Transformer was started.");
+	}
+
+	private void RunBrokenLinkChecker()
+	{
+		InstantJobRegistry.RunInstantJob<BrokenLinkCheckerJob>(parameter: null);
+		ToastService.ShowInfo("Broken link checker was started.");
 	}
 }
