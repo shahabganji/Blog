@@ -24,7 +24,7 @@ comments "/quiz B C" ───────────────────�
 3. Post a PR comment with one letter per question, in order: `/quiz B C A`.
 4. A bot reply says whether you passed. If you did, the check turns green and your answer comment is hidden.
 
-Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers* list, including those who have already submitted a review. The PR author, bots and apps (Copilot included) get a reply saying they can't answer, and it doesn't use an attempt. The author requests a reviewer from the PR sidebar.
+Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers* list, including those who have already submitted a review (only if they are collaborators, since anyone can review a public PR). The PR author, bots and apps (Copilot included) get a reply saying they can't answer, and it doesn't use an attempt. The author requests a reviewer from the PR sidebar.
 
 ### Details
 

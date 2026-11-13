@@ -132,9 +132,14 @@ cmd_sync() {
   head="$(jq -r .head.sha <<<"$pr_json")"
   # Only people asked to review the PR may answer: requested reviewers, plus those who already reviewed (GitHub drops a
   # reviewer from the request list once they submit a review). Bots and the PR author are never eligible.
-  reviewers="$({ jq -c '.requested_reviewers[] | {login, type}' <<<"$pr_json"
-                 gh api --paginate "repos/$REPO/pulls/$PR/reviews" --jq '.[] | {login: .user.login, type: .user.type}'; } \
-    | jq -sc --arg author "$(jq -r .user.login <<<"$pr_json")" '[.[] | select(.type == "User" and .login != $author) | .login] | unique')"
+  # GitHub only lets collaborators be requested as reviewers, but anyone can submit a review on a public repo.
+  # Review authors outside $TRUSTED would never get their answers graded (the workflow skips their comments),
+  # so they don't count as reviewers. Otherwise their unused attempts would keep the check pending.
+  reviewers="$({ jq -c '.requested_reviewers[] | {login, type, association: "COLLABORATOR"}' <<<"$pr_json"
+                 gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
+                   --jq '.[] | {login: .user.login, type: .user.type, association: .author_association}'; } \
+    | jq -sc --arg author "$(jq -r .user.login <<<"$pr_json")" --argjson trusted "$TRUSTED" \
+        '[.[] | select(.type == "User" and .login != $author and (.association as $a | $trusted | index($a))) | .login] | unique')"
 
   quiz="$(jq -c --arg m "$MARKER" --argjson trusted "$TRUSTED" \
     '[.[] | select((.author_association as $a | $trusted | index($a)) and (.body | contains($m)))] | last // empty' "$tmp/comments.json")"
