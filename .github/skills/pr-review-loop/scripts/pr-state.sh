@@ -82,8 +82,13 @@ while :; do
     ] | join("; ")' <<<"$state")"
   if [[ -z "$waiting" ]]; then
     sleep 20 # bots post their review comments shortly after their check completes
-    snapshot
-    exit 0
+    final="$(snapshot)"
+    # Right after a push the first snapshot can still describe the previous head, so only stop if nothing moved meanwhile.
+    if [[ "$(jq -r '"\(.head_sha) \(.pending_checks | length)"' <<<"$final")" == "$(jq -r .head_sha <<<"$state") 0" ]]; then
+      echo "$final"
+      exit 0
+    fi
+    state="$final" waiting="the PR to settle (head or checks changed)"
   fi
   if (( elapsed >= WAIT_TIMEOUT )); then
     echo "timed out after ${elapsed}s waiting for: $waiting" >&2
