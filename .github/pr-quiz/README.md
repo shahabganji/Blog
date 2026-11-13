@@ -16,14 +16,14 @@ publish-quiz.sh dispatches the payload ───────────▶ "PR 
                                                     with the summary + quiz as its Markdown, attach the HTML page
 requested reviewer reads the check,
 Actions ▸ "PR quiz: answer" ▸ Run workflow
-(PR number + Q1–Q5 dropdowns) ────────────────────▶ "PR quiz: answer": grade, record the attempt in the check,
+(PR, quiz ID, Q1–Q5 dropdowns) ───────────────────▶ "PR quiz: answer": grade, record the attempt in the check,
                                                     set "pr-quiz" = success (≥ 90%) or failure (attempts used up)
 ```
 
 ### For the reviewer
 
 1. On the PR, open the `pr-quiz` check (merge box → **Details**, or the **Checks** tab). Its page shows the summary and the questions. The publish run also has the page as an HTML artifact (`pr-<n>-summary.html`), which opens in the browser.
-2. Open **Actions → PR quiz: answer → Run workflow** (the check links to it). Enter the PR number and pick a letter for each question. Leave the questions the quiz doesn't have at `-`.
+2. Open **Actions → PR quiz: answer → Run workflow** (the check links to it). Enter the PR number and the **quiz ID** shown on the check, and pick a letter for each question. Leave the questions the quiz doesn't have at `-`.
 3. Run it. The run's summary says whether you passed, and the `pr-quiz` check on the PR updates. A run that didn't pass, or was refused, shows as failed, with the reason in its summary.
 
 Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers* list, including those who have already submitted a review (only if they are collaborators, since anyone can review a public PR). GitHub records who started the run, so nobody can answer for someone else. Runs by the PR author, bots or apps (Copilot included) are refused and don't use an attempt. The author requests a reviewer from the PR sidebar. Running a workflow needs write access, which requested reviewers have.
@@ -36,6 +36,7 @@ Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers*
 - Quizzes have 2–5 questions, because a single question can be guessed. The form has 5 fixed slots (Q1–Q5), because workflow inputs can't change per PR. Answering the wrong number of questions doesn't use an attempt. The constants live in `quiz.sh` and are re-applied on every run, so a payload cannot change them. With up to 5 questions, 90% means every answer must be right.
 - A failed attempt is only reported as "not passed", without a score, so the score can't be used to narrow down guesses.
 - Publishing checks that the payload is valid, belongs to the PR's current head commit and decrypts with the private key. A bad payload is refused and the check is left as it was.
+- Every build of a quiz has a 6-character quiz ID, derived from its encrypted answer key. The reviewer enters it in the form; an answer with another ID (the quiz was replaced after the reviewer read it, or while the run was queued) is refused without using an attempt, so it is never graded against a quiz the reviewer didn't see.
 - Publishing again replaces the quiz and resets the attempts, even after a pass: the latest quiz decides. A completed check can't go back to pending, so a new check run is created; the newest run is the one that counts.
 - A new push changes the head commit, which has no `pr-quiz` check yet. The PR is blocked again until a fresh quiz is published and passed. Answers for the old commit are refused.
 - If the answer key can't be decrypted when grading (for example after `setup.sh --rotate`), the check fails. Publish a new quiz to recover.

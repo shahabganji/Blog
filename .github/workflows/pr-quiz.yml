@@ -2,7 +2,8 @@
 #
 # 1. The pr-review-loop skill publishes a summary and quiz with pr-quiz-publish.yml. It appears on the PR's pr-quiz check.
 # 2. A requested reviewer (not the PR author, not a bot) opens this workflow in the Actions tab, clicks "Run workflow", enters
-#    the PR number and picks one letter per question. GitHub records who started the run (github.triggering_actor), so no
+#    the PR number and the quiz ID shown on the check, and picks one letter per question. A stale quiz ID (the quiz was
+#    replaced since the reviewer read it) is refused without using an attempt. GitHub records who started the run (github.triggering_actor), so no
 #    comment is needed. The answers are read from the event file, never from env, so they don't show up in the log.
 # 3. "quiz.sh answer" grades the attempt and sets the pr-quiz check: pending, passed (score >= 90%) or failed (every reviewer
 #    used 3 attempts). The run itself fails when the answer did not pass or was refused, with the reason in its summary.
@@ -19,6 +20,10 @@ on:
         description: Pull request number
         required: true
         type: number
+      quiz_id:
+        description: Quiz ID shown on the pr-quiz check (6 characters)
+        required: true
+        type: string
       q1:
         description: Q1
         type: choice

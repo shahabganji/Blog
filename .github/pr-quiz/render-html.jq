@@ -45,7 +45,7 @@ table{width:100%;border-collapse:collapse}td,th{border-top:1px solid var(--borde
     "<ul>" + ((.review_discussion) | map("<li><span class=\"chip\">\(.source | e)</span>\(.topic | e) → \(.outcome | e)</li>") | join("")) + "</ul>" end)
 + "<section class=\"card\"><h2><span class=\"icon\">📝</span>Comprehension quiz</h2>"
 + "<p class=\"note\">\(.questions | length) questions. Pass mark \(.pass_mark)%, \(.max_attempts) attempts per reviewer. Only reviewers requested on the pull request can answer. "
-+ "Tick your answers here, then open the answer form, click <b>Run workflow</b>, enter PR <b>\(.pr)</b> and choose the same letters for Q1 to Q\(.questions | length).</p>"
++ "Tick your answers here, then open the answer form, click <b>Run workflow</b>, enter PR <b>\(.pr)</b> and quiz ID <code>\(.quiz_id | e)</code>, and choose the same letters for Q1 to Q\(.questions | length).</p>"
 + ([.questions | to_entries[] | . as $q |
     "<div class=\"q\"><h3>Q\($q.key + 1). \($q.value.question | e)</h3>"
     + ($q.value.options | to_entries | map(

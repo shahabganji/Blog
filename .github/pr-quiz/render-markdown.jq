@@ -17,12 +17,13 @@ def answer_url: .pr_url | sub("/pull/[0-9]+$"; "/actions/workflows/pr-quiz.yml")
 + section("Out of scope"; bullets(.out_of_scope))
 + section("Review discussion"; (.review_discussion // []) | map("- **\(.source)**: \(.topic) → \(.outcome)") | join("\n"))
 + "### 📝 Comprehension quiz (\(.questions | length) question\(if (.questions | length) == 1 then "" else "s" end), pass mark \(.pass_mark)%)\n\n"
++ "Quiz ID: `\(.quiz_id)`\n\n"
 + ([.questions | to_entries[] |
     "**Q\(.key + 1). \(.value.question)**\n\n"
     + (.value.options | to_entries | map("- \(letter(.key))) \(.value)") | join("\n"))
   ] | join("\n\n"))
 + "\n\n---\n"
-+ "**How to answer:** open [PR quiz: answer](\(answer_url)), click **Run workflow**, enter PR `\(.pr)`, "
++ "**How to answer:** open [PR quiz: answer](\(answer_url)), click **Run workflow**, enter PR `\(.pr)` and quiz ID `\(.quiz_id)`, "
 + "choose one letter for each of Q1 to Q\(.questions | length) (leave the other questions at `-`) and run it. "
 + "The run tells you whether you passed. Only reviewers requested on this PR can answer (not the author or bots). "
 + "Each reviewer gets \(.max_attempts) attempts. The `pr-quiz` check passes at \(.pass_mark)% or higher.\n\n"

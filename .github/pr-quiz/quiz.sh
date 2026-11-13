@@ -46,10 +46,15 @@ cmd_validate() {
   [[ -z "$errors" ]] || die "invalid quiz spec:"$'\n'"$errors"
 }
 
-public_spec() { # $1 spec file, $2 pr, $3 sha, $4 url -> public spec (answers removed, server-side constants applied)
-  jq -c --argjson pr "$2" --arg sha "$3" --arg url "$4" --argjson pass "$PASS_MARK" --argjson attempts "$MAX_ATTEMPTS" '
+# The quiz ID names one build of a quiz. Reviewers enter it in the answer form, so an answer to a quiz that has since been
+# replaced is refused instead of being graded against the new one. It is derived from the encrypted key, so it can't be
+# chosen independently of the answers.
+quiz_id() { printf '%s' "$1" | openssl dgst -sha256 -r | cut -c1-6; } # $1 ciphertext
+
+public_spec() { # $1 spec file, $2 pr, $3 sha, $4 url, $5 quiz id -> public spec (answers removed, server-side constants applied)
+  jq -c --argjson pr "$2" --arg sha "$3" --arg url "$4" --arg id "$5" --argjson pass "$PASS_MARK" --argjson attempts "$MAX_ATTEMPTS" '
     del(.ciphertext) | .questions |= map({question, options})
-    | . + {version: 1, pr: $pr, pr_url: $url, head_sha: $sha, pass_mark: $pass, max_attempts: $attempts}' "$1"
+    | . + {version: 1, pr: $pr, pr_url: $url, head_sha: $sha, quiz_id: $id, pass_mark: $pass, max_attempts: $attempts}' "$1"
 }
 
 cmd_build() {
@@ -60,7 +65,7 @@ cmd_build() {
   answers="$(jq -r '[.questions[].answer | ascii_upcase] | join("")' "$spec")"
   key="$(jq -cn --argjson pr "$pr" --arg sha "$sha" --arg answers "$answers" '{pr: $pr, sha: $sha, answers: $answers}' \
     | openssl pkeyutl -encrypt -pubin -inkey "$PUBLIC_KEY" -pkeyopt rsa_padding_mode:oaep | openssl base64 -A)"
-  public="$(public_spec "$spec" "$pr" "$sha" "$url")"
+  public="$(public_spec "$spec" "$pr" "$sha" "$url" "$(quiz_id "$key")")"
   jq -r -f "$DIR/render-markdown.jq" <<<"$public" >"$out/pr-$pr-quiz.md"
   jq -r -f "$DIR/render-html.jq" <<<"$public" >"$out/pr-$pr-summary.html"
   jq -c --arg key "$key" '. + {ciphertext: $key}' <<<"$public" | openssl base64 -A
@@ -195,7 +200,7 @@ cmd_publish() {
   rm -f "$tmp/key.pem"
 
   # Re-apply the server-side constants: a payload cannot lower the pass mark or raise the attempt limit.
-  public_spec "$tmp/payload.json" "$PR" "$head" "$(jq -r .pr_url "$tmp/payload.json")" >"$tmp/public.json"
+  public_spec "$tmp/payload.json" "$PR" "$head" "$(jq -r .pr_url "$tmp/payload.json")" "$(quiz_id "$(jq -r .ciphertext "$tmp/payload.json")")" >"$tmp/public.json"
   jq -r -f "$DIR/render-html.jq" "$tmp/public.json" >"$out/pr-$PR-summary.html"
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then echo "html=$out/pr-$PR-summary.html" >>"$GITHUB_OUTPUT"; fi
   # A new quiz starts with no attempts, even if an earlier quiz on this commit was passed: the latest quiz decides.
@@ -206,7 +211,7 @@ cmd_publish() {
 }
 
 cmd_answer() {
-  local check payload state errors n given result attempts passed
+  local check payload state errors id n given result attempts passed
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   load_pr
@@ -219,7 +224,8 @@ cmd_answer() {
   openssl base64 -d -A <<<"$payload" >"$tmp/payload.json" 2>/dev/null || true
   errors="$(verify_payload "$tmp/payload.json")"
   [[ -z "$errors" ]] || stop "❌ The quiz on the \`$CHECK_NAME\` check can't be graded ($errors). Ask the author to publish a new one."
-  public_spec "$tmp/payload.json" "$PR" "$head" "$(jq -r .pr_url "$tmp/payload.json")" >"$tmp/public.json"
+  id="$(quiz_id "$(jq -r .ciphertext "$tmp/payload.json")")"
+  public_spec "$tmp/payload.json" "$PR" "$head" "$(jq -r .pr_url "$tmp/payload.json")" "$id" >"$tmp/public.json"
   n="$(jq '.questions | length' "$tmp/payload.json")"
 
   if ! jq -e --arg l "$ACTOR" 'index($l)' <<<"$reviewers" >/dev/null; then
@@ -227,6 +233,9 @@ cmd_answer() {
   fi
   if jq -e '.results | any(.passed)' <<<"$state" >/dev/null; then
     note "✅ The quiz on PR #$PR has already been passed."; return 0
+  fi
+  if [[ "$(jq -r '.inputs.quiz_id // "" | ascii_downcase | gsub("\\s"; "")' "${GITHUB_EVENT_PATH:?}")" != "$id" ]]; then
+    stop "⚠️ @$ACTOR, the quiz ID you entered isn't the current quiz on PR #$PR: the quiz was replaced or the ID was mistyped. Re-read the summary on the \`$CHECK_NAME\` check, then answer again with the quiz ID shown there. This did not count as an attempt."
   fi
   attempts="$(jq --arg l "$ACTOR" '[.results[] | select(.by == $l)] | length' <<<"$state")"
   if (( attempts >= MAX_ATTEMPTS )); then
