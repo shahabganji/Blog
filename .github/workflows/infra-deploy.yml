@@ -1,0 +1,50 @@
+# Deploys the blog infrastructure to production. Runs only for release tags (e.g. release/v1.0.0);
+# the "prod" environment requires manual approval and only accepts release/v* tags.
+# Upstream (linkdotnet/Blog) uses plain v* tags, hence the dedicated prefix.
+name: infra-deploy
+
+on:
+  push:
+    tags: [ "release/v*" ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-prod-up
+  cancel-in-progress: false
+
+jobs:
+  up:
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Ensure the tagged commit is on the shahab branch
+        run: |
+          git fetch origin shahab
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/shahab; then
+            echo "::error::Tag ${GITHUB_REF_NAME} points to a commit that is not on the shahab branch."
+            exit 1
+          fi
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-quality: preview
+          dotnet-version: 11.0.x
+      - uses: pulumi/actions@v7
+        with:
+          command: up
+          stack-name: shahabganji/blog-infra/prod
+          work-dir: infra
+          diff: true

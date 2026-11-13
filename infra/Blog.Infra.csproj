@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>Blog.Infra</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Pulumi" />
+		<PackageReference Include="Pulumi.AzureNative" />
+	</ItemGroup>
+
+</Project>

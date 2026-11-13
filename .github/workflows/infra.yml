@@ -1,0 +1,57 @@
+# Pulumi preview for the blog infrastructure. Never deploys.
+# Production deployments happen only from release tags, see infra-deploy.yml.
+name: infra-preview
+
+on:
+  pull_request:
+    branches: [ shahab ]
+    paths:
+      - "infra/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/infra*.yml"
+  push:
+    branches: [ shahab ]
+    paths:
+      - "infra/**"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/infra*.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    # Secrets are not available to pull requests from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      # The azure-native provider authenticates via GitHub's OIDC token (no client secret).
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-quality: preview
+          dotnet-version: 11.0.x
+      - uses: pulumi/actions@v7
+        with:
+          command: preview
+          stack-name: shahabganji/blog-infra/prod
+          work-dir: infra
+          diff: true
+          comment-on-pr: ${{ github.event_name == 'pull_request' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
