@@ -1,0 +1,85 @@
+# Comprehension quiz gate for PRs into shahab.
+#
+# 1. The pr-review-loop skill posts a summary + quiz comment containing an encrypted answer key (see .github/pr-quiz/README.md).
+#    The "publish" job validates it, renders the HTML summary (run artifact + job summary) and sets the pr-quiz check to pending.
+# 2. A reviewer answers with a comment such as "/quiz B C A". The "grade" job decrypts the key, posts the score and marks
+#    pr-quiz as passed (score >= 90%) or, after 3 failed attempts, failed.
+#
+# issue_comment workflows always run from the default branch, so PR code (or an AI agent working on it) cannot change how it is
+# graded, and the private key lives in the "pr-quiz" environment, which only the shahab branch can use.
+name: pr-quiz
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  publish:
+    if: >-
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '<!-- pr-quiz:v1 ') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      checks: write
+      pull-requests: read
+    concurrency:
+      group: pr-quiz-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/pr-quiz
+          persist-credentials: false
+
+      - id: quiz
+        run: mkdir -p out && .github/pr-quiz/quiz.sh publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUT_DIR: out
+
+      - if: steps.quiz.outputs.html
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.quiz.outputs.html }}
+          archive: false
+          retention-days: 30
+
+  grade:
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/quiz') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pr-quiz
+    permissions:
+      checks: write
+      issues: write
+      pull-requests: write
+    concurrency:
+      group: pr-quiz-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/pr-quiz
+          persist-credentials: false
+
+      - run: .github/pr-quiz/quiz.sh grade
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.event.comment.user.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_NODE_ID: ${{ github.event.comment.node_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR_QUIZ_PRIVATE_KEY: ${{ secrets.PR_QUIZ_PRIVATE_KEY }}
