@@ -12,14 +12,27 @@ writes quiz.json (summary + 2–5 questions)
 quiz.sh build ─ encrypts answers with public.pem
 posts the summary + quiz comment ───────────────▶ sync: render HTML (artifact + job summary),
                                                    set check "pr-quiz" = pending on the PR head
-reviewer reads the summary, comments "/quiz B C" ─▶ sync: grade every answer not graded yet, reply,
-                                                   set "pr-quiz" = success (≥ 90%) or failure (3 attempts used)
+requested reviewer reads the summary,
+comments "/quiz B C" ──────────────────────────▶ sync: grade every answer not graded yet, reply,
+                                                   set "pr-quiz" = success (≥ 90%) or failure (attempts used up)
 ```
+
+### For the reviewer
+
+1. Read the summary and quiz comment in the PR's **Conversation** tab. It's ordinary Markdown in the PR page, so there's nothing to download.
+2. Optional: open the `pr-quiz` check → **Details** → artifact `pr-<n>-summary.html`. It opens in the browser and has a clickable quiz that builds the comment for you.
+3. Post a PR comment with one letter per question, in order: `/quiz B C A`.
+4. A bot reply says whether you passed. If you did, the check turns green and your answer comment is hidden.
+
+Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers* list, including those who have already submitted a review. The PR author, bots and apps (Copilot included) get a reply saying they can't answer, and it doesn't use an attempt. The author requests a reviewer from the PR sidebar.
+
+### Details
 
 - The comment contains the summary and questions in Markdown. A hidden `<!-- pr-quiz:v1 … -->` payload holds the same data plus the answer key, encrypted with RSA-OAEP. The key is bound to the PR number and head commit, so it cannot be copied to another PR.
 - The HTML summary (`pr-<n>-summary.html`) is written locally by the skill, and uploaded as an artifact of each `sync` run (linked from the `pr-quiz` check's **Details**). It includes a clickable version of the quiz that builds the `/quiz …` comment for you.
 - Answer format: one letter per question, in order: `/quiz B C A`, `/quiz bca` and `/quiz 1B 2C 3A` all work. Malformed answers or the wrong count don't use an attempt.
-- Pass mark is 90% and there are 3 attempts per quiz. Quizzes have 2–5 questions, because a single question can be guessed. The constants live in `quiz.sh`; the workflow re-applies them, so a quiz comment cannot change them. With up to 5 questions, 90% means every answer must be right.
+- Pass mark is 90% and each reviewer gets 3 attempts per quiz. One reviewer passing is enough. The check only fails when every requested reviewer has used up their attempts.
+- Quizzes have 2–5 questions, because a single question can be guessed. The constants live in `quiz.sh`; the workflow re-applies them, so a quiz comment cannot change them. With up to 5 questions, 90% means every answer must be right.
 - A failed attempt is only reported as "not passed", without a score, so the score can't be used to narrow down guesses. After a pass, the answer comment is minimized.
 - `sync` is idempotent. It works from the comment history: each answer gets exactly one reply, and the check is derived from the recorded results. When answers arrive while a run is busy, the concurrency group may cancel a queued run, but the next run grades the skipped answers. Re-running a workflow never resets a pass.
 - A new push changes the head commit, which has no `pr-quiz` check yet. The PR is blocked again until a fresh quiz is published and passed.
@@ -65,7 +78,8 @@ Activate only after this workflow is merged into `shahab`. Otherwise the require
 This is a **comprehension gate, not a security control**.
 
 - The public key is public, so any collaborator can post a quiz with answers they know. Only quiz comments from OWNER/MEMBER/COLLABORATOR count.
-- Anyone with write access can answer, including the PR author. That suits a single-maintainer repository.
+- Only requested reviewers who are users (not bots) and not the PR author can answer. GitHub can't tell whether a *person's* token is being used by an agent. If a reviewer lets an agent post comments as them, the agent could answer. Agents that open PRs with the author's token are excluded as the author.
+- In a single-maintainer repository, the maintainer can't pass the quiz on their own PRs, because GitHub doesn't allow requesting a review from the PR author. Either request a review from another collaborator, or merge with the admin bypass. PRs opened by the Copilot coding agent are authored by a bot, so the maintainer can be their reviewer.
 - Any workflow in this repository that has `checks: write` could create a check named `pr-quiz` (they all share the GitHub Actions app id that the ruleset matches).
 - Answers are visible in the answer comment until it is minimized after a pass. Each new quiz has new questions.
 - Repository admins can bypass the ruleset.

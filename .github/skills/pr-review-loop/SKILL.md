@@ -62,7 +62,7 @@ Rules:
 
 - Never merge, close, force-push, rewrite published history, or bypass rulesets.
 - Never weaken a gate to make it pass: no edits to `.github/workflows/pr-quiz.yml`, `.github/workflows/copilot-review-gate.yml`, `.github/pr-quiz/**` or rulesets unless that is the PR's explicit purpose and the user asked for it.
-- Never answer the quiz, and never write the answers anywhere except the private `quiz.json` in the session workspace.
+- Never answer the quiz, and never write the answers anywhere except the private `quiz.json` in the session workspace. Only a human reviewer requested on the PR may answer it. Never request a reviewer yourself just to get the quiz answered; ask the user who should review.
 - Never commit secrets, `appsettings.*` files with real values, or the private quiz spec.
 - Never disable or skip tests or checks to get to green.
 
@@ -105,4 +105,4 @@ End with a short report:
 - the number of review rounds;
 - the threads fixed, refuted or escalated, with links;
 - the path to the HTML summary;
-- that the PR now waits for a reviewer to pass the quiz (`/quiz …` comment) and to merge it.
+- that the PR now waits for a requested human reviewer to pass the quiz (`/quiz …` comment) and to merge it. If no human reviewer is requested, say so: the PR author can't answer their own quiz.

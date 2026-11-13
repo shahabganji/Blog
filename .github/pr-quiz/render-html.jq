@@ -45,7 +45,7 @@ button{background:var(--ok);color:#fff;border:0;border-radius:8px;padding:8px 14
 + card("💬"; "Review discussion"; if (.review_discussion // []) == [] then "" else
     "<ul>" + ((.review_discussion) | map("<li><span class=\"chip\">\(.source | e)</span>\(.topic | e) → \(.outcome | e)</li>") | join("")) + "</ul>" end)
 + "<section class=\"card\"><h2><span class=\"icon\">📝</span>Comprehension quiz</h2>"
-+ "<p class=\"note\">\(.questions | length) question(s). Pass mark \(.pass_mark)%, \(.max_attempts) attempts per quiz. Choose your answers, copy the comment and post it on the pull request.</p>"
++ "<p class=\"note\">\(.questions | length) question(s). Pass mark \(.pass_mark)%, \(.max_attempts) attempts per reviewer. Only reviewers requested on the pull request can answer. Choose your answers, copy the comment and post it on the pull request.</p>"
 + ([.questions | to_entries[] | . as $q |
     "<div class=\"q\"><h3>\($q.key + 1). \($q.value.question | e)</h3>"
     + ($q.value.options | to_entries | map(

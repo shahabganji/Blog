@@ -1,9 +1,9 @@
 # Comprehension quiz gate for PRs into shahab.
 #
 # 1. The pr-review-loop skill posts a summary + quiz comment containing an encrypted answer key (see .github/pr-quiz/README.md).
-# 2. A reviewer answers with a comment such as "/quiz B C A".
+# 2. A requested reviewer (not the PR author, not a bot) answers with a comment such as "/quiz B C A".
 # Either comment runs "quiz.sh sync": it renders the HTML summary (run artifact + job summary), grades every answer that has
-# not been graded yet and sets the pr-quiz check on the PR head: pending, passed (score >= 90%) or failed (3 attempts used).
+# not been graded yet and sets the pr-quiz check on the PR head: pending, passed (score >= 90%) or failed (every reviewer used 3 attempts).
 # Sync is idempotent and works from the comment history, so a run that is cancelled by the concurrency group or re-run
 # loses or repeats nothing.
 #

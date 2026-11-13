@@ -123,12 +123,18 @@ reply_all() { # $1 answers JSON, $2 text
 }
 
 cmd_sync() {
-  local out="${OUT_DIR:-.}" head quiz quiz_id errors unreplied answers stale others attempts passed n
-  local id node body given result
+  local out="${OUT_DIR:-.}" pr_json head reviewers quiz quiz_id errors unreplied answers stale others results passed n
+  local id node login body given result attempts left title
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" --jq '.[]' | jq -s 'sort_by(.id)' >"$tmp/comments.json"
-  head="$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)"
+  pr_json="$(gh api "repos/$REPO/pulls/$PR")"
+  head="$(jq -r .head.sha <<<"$pr_json")"
+  # Only people asked to review the PR may answer: requested reviewers, plus those who already reviewed (GitHub drops a
+  # reviewer from the request list once they submit a review). Bots and the PR author are never eligible.
+  reviewers="$({ jq -c '.requested_reviewers[] | {login, type}' <<<"$pr_json"
+                 gh api --paginate "repos/$REPO/pulls/$PR/reviews" --jq '.[] | {login: .user.login, type: .user.type}'; } \
+    | jq -sc --arg author "$(jq -r .user.login <<<"$pr_json")" '[.[] | select(.type == "User" and .login != $author) | .login] | unique')"
 
   quiz="$(jq -c --arg m "$MARKER" --argjson trusted "$TRUSTED" \
     '[.[] | select((.author_association as $a | $trusted | index($a)) and (.body | contains($m)))] | last // empty' "$tmp/comments.json")"
@@ -182,10 +188,12 @@ cmd_sync() {
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then cat "$out/summary.md" >>"$GITHUB_STEP_SUMMARY"; fi
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then echo "html=$out/pr-$PR-summary.html" >>"$GITHUB_OUTPUT"; fi
 
-  read -r attempts passed < <(jq -r --arg r "$RESULT_MARKER" --arg q "$quiz_id" '
+  # Recorded results for this quiz: [{by, passed}]. Attempts are counted per reviewer.
+  results="$(jq -c --arg r "$RESULT_MARKER" --arg q "$quiz_id" '
     [.[] | select(.user.login == "github-actions[bot]") | .body
-     | capture("\($r)answer=[0-9]+ quiz=(?<quiz>[0-9]+) sha=[0-9a-f]+ attempt=[0-9]+ passed=(?<passed>true|false)")? | select(.quiz == $q)]
-    | "\(length) \(any(.passed == "true"))"' "$tmp/comments.json")
+     | capture("\($r)answer=[0-9]+ quiz=(?<quiz>[0-9]+) sha=[0-9a-f]+ attempt=[0-9]+ passed=(?<passed>true|false) by=(?<by>[^ ]+)")?
+     | select(.quiz == $q) | {by, passed: (.passed == "true")}]' "$tmp/comments.json")"
+  passed="$(jq -r 'any(.passed)' <<<"$results")"
   n="$(jq '.questions | length' "$tmp/payload.json")"
 
   # Verify the answer key on every run until the quiz is passed, so a re-run without new answers still reports a broken key.
@@ -200,10 +208,16 @@ cmd_sync() {
   fi
 
   while read -r answer <&3; do
-    id="$(jq -r .id <<<"$answer")"; node="$(jq -r .node_id <<<"$answer")"; body="$(jq -r .body <<<"$answer")"
+    id="$(jq -r .id <<<"$answer")"; node="$(jq -r .node_id <<<"$answer")"; login="$(jq -r .login <<<"$answer")"
+    body="$(jq -r .body <<<"$answer")"
+    if ! jq -e --arg l "$login" 'index($l)' <<<"$reviewers" >/dev/null; then
+      reply "$id" "⚠️ @$login, only reviewers requested on this PR can answer its quiz (not the PR author, bots or agents). Ask the author to request your review, then answer again. This did not count as an attempt."
+      continue
+    fi
     if [[ "$passed" == "true" ]]; then reply "$id" "✅ This quiz has already been passed."; continue; fi
+    attempts="$(jq --arg l "$login" '[.[] | select(.by == $l)] | length' <<<"$results")"
     if (( attempts >= MAX_ATTEMPTS )); then
-      reply "$id" "⛔ No attempts left for this quiz. Re-read the summary and ask the author to publish a new quiz."; continue
+      reply "$id" "⛔ @$login, you have no attempts left for this quiz. Re-read the summary and ask the author to publish a new quiz."; continue
     fi
     if ! given="$(cmd_parse_answers "$body")"; then
       reply "$id" "⚠️ Could not read your answers. Use one letter per question, in order, for example \`/quiz B C A\`. This did not count as an attempt."; continue
@@ -214,28 +228,38 @@ cmd_sync() {
     result="$(cmd_check_answers "$tmp/payload.json" "$given" "$tmp/key.pem")"
     attempts=$((attempts + 1))
     passed="$(jq -r .passed <<<"$result")"
+    results="$(jq -c --arg l "$login" --argjson p "$passed" '. + [{by: $l, passed: $p}]' <<<"$results")"
     if [[ "$passed" == "true" ]]; then
-      reply "$id" "✅ @$(jq -r .login <<<"$answer") passed the quiz ($(jq -r .score <<<"$result")%)." "quiz=$quiz_id sha=$head attempt=$attempts passed=true"
+      reply "$id" "✅ @$login passed the quiz ($(jq -r .score <<<"$result")%)." "quiz=$quiz_id sha=$head attempt=$attempts passed=true by=$login"
       # Hide the correct answers from later reviewers. Best effort only.
       gh api graphql -f id="$node" \
         -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) { clientMutationId } }' >/dev/null || true
     else
       # Only pass/fail is reported: a per-attempt score would tell the reviewer how many guesses were right.
-      reply "$id" "❌ Not passed. The pass mark is ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts))." "quiz=$quiz_id sha=$head attempt=$attempts passed=false"
+      reply "$id" "❌ @$login, not passed. The pass mark is ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts))." "quiz=$quiz_id sha=$head attempt=$attempts passed=false by=$login"
     fi
   done 3< <(jq -c '.[]' <<<"$answers")
   rm -f "$tmp/key.pem"
 
   if [[ "$passed" == "true" ]]; then
     upsert_check "$head" '{"status":"completed","conclusion":"success"}' "Quiz passed" "$(cat "$out/summary.md")"
-  elif (( attempts >= MAX_ATTEMPTS )); then
-    fail_check "$head" "Quiz not passed, no attempts left" "Publish a new quiz to try again."$'\n\n'"$(cat "$out/summary.md")"
   else
-    upsert_check "$head" '{"status":"in_progress"}' \
-      "$(if (( attempts == 0 )); then echo "Waiting for a reviewer to pass the quiz"; else echo "Not passed yet ($attempts of $MAX_ATTEMPTS attempts used)"; fi)" \
-      "Answer with a \`/quiz …\` PR comment."$'\n\n'"$(cat "$out/summary.md")"
+    # Reviewers who can still answer, and a per-reviewer attempt overview for the check summary.
+    left="$(jq -c --argjson results "$results" --argjson max "$MAX_ATTEMPTS" \
+      'map(. as $l | {login: $l, used: ([$results[] | select(.by == $l)] | length)}) | map(select(.used < $max))' <<<"$reviewers")"
+    if [[ "$reviewers" == "[]" ]]; then
+      upsert_check "$head" '{"status":"in_progress"}' "Waiting for a reviewer to be requested" \
+        "Only reviewers requested on this PR can answer the quiz."$'\n\n'"$(cat "$out/summary.md")"
+    elif [[ "$left" == "[]" ]]; then
+      fail_check "$head" "Quiz not passed, no attempts left" "Every requested reviewer used all $MAX_ATTEMPTS attempts. Publish a new quiz to try again."$'\n\n'"$(cat "$out/summary.md")"
+    else
+      title="$(jq -r --argjson max "$MAX_ATTEMPTS" 'if all(.used == 0) then "Waiting for a reviewer to pass the quiz"
+        else "Not passed yet (" + (map("@\(.login): \(.used) of \($max) attempts used") | join(", ")) + ")" end' <<<"$left")"
+      upsert_check "$head" '{"status":"in_progress"}' "$title" \
+        "Requested reviewers answer with a \`/quiz …\` PR comment."$'\n\n'"$(cat "$out/summary.md")"
+    fi
   fi
-  echo "PR #$PR quiz $quiz_id at $head: attempts=$attempts passed=$passed"
+  echo "PR #$PR quiz $quiz_id at $head: reviewers=$reviewers results=$results"
 }
 
 case "${1:-}" in
