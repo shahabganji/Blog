@@ -1,0 +1,41 @@
+{
+  "title": "Gate merges into shahab on Copilot finishing its review",
+  "tldr": "PRs into shahab can no longer be merged while Copilot is still reviewing the latest push.",
+  "why": "Copilot's review is required, but its check never reports on the PR, so requiring it directly blocked every PR forever.",
+  "intent": "Make 'Copilot has reviewed this exact commit' a real merge condition without blocking PRs indefinitely.",
+  "what": [
+    { "title": "New gate workflow", "detail": "copilot-review-gate waits for Copilot's review run on the PR head commit and mirrors its result." },
+    { "title": "Ruleset update", "detail": "The shahab ruleset now requires copilot-review-gate instead of Copilot's own check." }
+  ],
+  "decisions": [
+    { "decision": "Poll the check-runs API instead of waiting for a review event", "reason": "Copilot's run is a dynamic workflow that is not part of the PR's check rollup." },
+    { "decision": "Retry transient API errors", "reason": "A single failed API call must not fail the merge gate." }
+  ],
+  "risks": ["If Copilot does not start within 15 minutes the gate fails and has to be re-run."],
+  "out_of_scope": ["Changing how Copilot itself reviews code."],
+  "review_discussion": [
+    { "source": "Gitar", "topic": "Transient gh api errors failed the gate", "outcome": "Fixed: the gate now retries." }
+  ],
+  "questions": [
+    {
+      "question": "Why does the ruleset require copilot-review-gate rather than Copilot's own check?",
+      "options": [
+        "Copilot's check is slower",
+        "Copilot's check never reports on the PR, so requiring it would block every PR",
+        "Copilot's check cannot fail",
+        "Rulesets cannot reference bot checks"
+      ],
+      "answer": "B"
+    },
+    {
+      "question": "What happens when the GitHub API briefly fails while the gate is polling?",
+      "options": [
+        "The gate fails and the PR is blocked",
+        "The gate passes immediately",
+        "The gate retries on the next poll",
+        "Copilot re-reviews the PR"
+      ],
+      "answer": "C"
+    }
+  ]
+}
