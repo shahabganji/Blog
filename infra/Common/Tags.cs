@@ -7,6 +7,7 @@ internal static class Tags
         ["Env"] = "Prod",
         ["Owner"] = "Shahab",
         ["Purpose"] = "blog",
+        ["PulumiAppTest"] = "1",
     };
 
     /// <summary>
