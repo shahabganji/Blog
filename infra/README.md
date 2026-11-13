@@ -103,10 +103,21 @@ PULUMI_ACCESS_TOKEN=<token> infra/scripts/setup-ci-identity.sh      # ...and als
 
 The script does the following:
 
-- Creates the Entra app `github-blog-infra`, with federated credentials for PRs, the `shahab` branch and the `prod` environment.
-- Grants it **Contributor on RG `blog` only**, which cannot modify or remove the delete lock (that requires `Microsoft.Authorization/locks/*`).
+- Creates two Entra apps:
+
+  | App | Role on RG `blog` | Trusted for (OIDC subject) | Client id |
+  |---|---|---|---|
+  | `github-blog-infra` (deploy) | **Contributor** | the `prod` environment **only** | `prod` environment variable `AZURE_CLIENT_ID` |
+  | `github-blog-infra-preview` | **Reader** | PRs and pushes to `shahab` | repo variable `AZURE_PREVIEW_CLIENT_ID` |
+
+  Code from a PR runs in the preview job, so that job only gets read access. Write access requires the approved,
+  tag-only `prod` environment. Neither app can modify or remove the delete lock (that needs `Microsoft.Authorization/locks/*`).
 - Configures the `prod` environment and the `shahab` ruleset as described above.
-- Sets the `AZURE_*` repo variables.
+- Sets the `AZURE_*` variables.
+
+`PULUMI_ACCESS_TOKEN` is a repo secret because previews need it to read the state, so any same-repo branch can use it. Forks
+can't, and Copilot agent PRs need your approval before workflows run. The token cannot write to Azure (the preview identity is
+read-only), but it can read the stack's decrypted config. Only give write access to the repo to people you trust with that.
 
 ## Known follow-ups (intentionally not changed)
 
