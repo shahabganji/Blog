@@ -114,9 +114,17 @@ upsert_check() { # $1 sha, $2 status/conclusion JSON, $3 title, $4 summary
   fi
 }
 
+fail_check() { # $1 sha, $2 title, $3 summary. Replaces an earlier pass: the latest quiz decides.
+  upsert_check "$1" '{"status":"completed","conclusion":"failure"}' "$2" "$3"
+}
+
+reply_all() { # $1 answers JSON, $2 text
+  jq -r '.[].id' <<<"$1" | while read -r id; do reply "$id" "$2"; done
+}
+
 cmd_sync() {
-  local out="${OUT_DIR:-.}" head quiz quiz_id errors answers attempts passed broken=false
-  local id node body given n result
+  local out="${OUT_DIR:-.}" head quiz quiz_id errors unreplied answers stale others attempts passed n
+  local id node body given result
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" --jq '.[]' | jq -s 'sort_by(.id)' >"$tmp/comments.json"
@@ -127,32 +135,44 @@ cmd_sync() {
   quiz_id=0
   if [[ -n "$quiz" ]]; then quiz_id="$(jq -r .id <<<"$quiz")"; fi
 
-  # Unanswered "/quiz" comments from trusted authors, posted after the current quiz.
-  answers="$(jq -c --argjson trusted "$TRUSTED" --argjson after "$quiz_id" --arg r "$RESULT_MARKER" '
+  # "/quiz" comments from trusted authors that have no result reply yet.
+  unreplied="$(jq -c --argjson trusted "$TRUSTED" --arg r "$RESULT_MARKER" '
     [.[] | select(.user.login == "github-actions[bot]") | .body | capture("\($r)answer=(?<id>[0-9]+)")? | .id | tonumber] as $done
     | [.[] | select((.author_association as $a | $trusted | index($a)) and (.body | test("^\\s*/quiz"; "i"))
-                    and .id > $after and (.id as $id | $done | index($id) | not))
+                    and (.id as $id | $done | index($id) | not))
          | {id, node_id, login: .user.login, body}]' "$tmp/comments.json")"
+  answers="$(jq -c --argjson q "$quiz_id" '[.[] | select(.id > $q)]' <<<"$unreplied")"
+  stale="$(jq -c --argjson q "$quiz_id" '[.[] | select(.id < $q)]' <<<"$unreplied")"
 
   if [[ -z "$quiz" ]]; then
-    jq -r '.[].id' <<<"$answers" | while read -r id; do reply "$id" "⚠️ There is no quiz on this PR yet."; done
+    reply_all "$answers" "⚠️ There is no quiz on this PR yet."
     return 0
   fi
+  # Answers to a quiz that was replaced before they were graded. No quiz fields, so they don't count as attempts.
+  reply_all "$stale" "⚠️ A newer quiz was published before this answer was graded. Please answer the latest quiz."
 
   payload_from_body <<<"$(jq -r .body <<<"$quiz")" >"$tmp/payload.json" || true
   errors="$(validation_errors "$tmp/payload.json" public 2>&1 || echo "payload is not valid JSON")"
   if [[ -z "$errors" && "$(jq -r .pr "$tmp/payload.json")" != "$PR" ]]; then errors="the quiz was built for another PR"; fi
   if [[ -n "$errors" ]]; then
-    jq -r '.[].id' <<<"$answers" | while read -r id; do reply "$id" "⚠️ The latest quiz is invalid and can't be graded. Ask the author to publish a new one."; done
+    reply_all "$answers" "⚠️ The latest quiz is invalid and can't be graded. Ask the author to publish a new one."
+    fail_check "$head" "The latest quiz is invalid" "Publish a new quiz."
     die "invalid quiz in comment $quiz_id:"$'\n'"$errors"
   fi
 
   if [[ "$(jq -r .head_sha "$tmp/payload.json")" != "$head" ]]; then
-    jq -r '.[].id' <<<"$answers" | while read -r id; do
-      reply "$id" "⚠️ The latest quiz covers commit \`$(jq -r '.head_sha[0:8]' "$tmp/payload.json")\`, but the PR now points at \`${head:0:8}\`. Wait for an updated quiz."
-    done
+    reply_all "$answers" "⚠️ The latest quiz covers commit \`$(jq -r '.head_sha[0:8]' "$tmp/payload.json")\`, but the PR now points at \`${head:0:8}\`. Wait for an updated quiz."
     echo "::notice::The latest quiz is for an older commit than the PR head ($head); nothing to grade."
     return 0
+  fi
+
+  # The check belongs to the commit, not the PR, so another open PR with the same head would share (and overwrite) it.
+  others="$(gh api "repos/$REPO/commits/$head/pulls" \
+    --jq "[.[] | select(.state == \"open\" and .head.sha == \"$head\" and .number != $PR) | \"#\\(.number)\"] | join(\", \")")"
+  if [[ -n "$others" ]]; then
+    reply_all "$answers" "⚠️ This commit is also the head of $others, and the \`$CHECK_NAME\` check belongs to the commit. Close the other PR, then answer again."
+    fail_check "$head" "Head commit is shared with $others" "Each gated PR needs its own head commit. Close $others, then re-run this check or answer again."
+    die "head commit $head is shared with $others"
   fi
 
   # Re-apply the server-side constants: a quiz comment cannot lower the pass mark or raise the attempt limit.
@@ -168,6 +188,17 @@ cmd_sync() {
     | "\(length) \(any(.passed == "true"))"' "$tmp/comments.json")
   n="$(jq '.questions | length' "$tmp/payload.json")"
 
+  # Verify the answer key on every run until the quiz is passed, so a re-run without new answers still reports a broken key.
+  if [[ "$passed" != "true" ]]; then
+    (umask 077 && printf '%s\n' "${PR_QUIZ_PRIVATE_KEY:-}" >"$tmp/key.pem")
+    if ! (cmd_check_answers "$tmp/payload.json" "$(printf "%${n}s" | tr " " A)" "$tmp/key.pem" >/dev/null); then
+      rm -f "$tmp/key.pem"
+      reply_all "$answers" "⚠️ This quiz can't be graded: its answer key could not be decrypted or doesn't match this PR (for example after a key rotation). Ask the author to publish a new quiz. This did not count as an attempt."
+      fail_check "$head" "Quiz can't be graded" "The answer key could not be decrypted. Publish a new quiz."
+      die "the answer key of quiz $quiz_id could not be decrypted or verified"
+    fi
+  fi
+
   while read -r answer <&3; do
     id="$(jq -r .id <<<"$answer")"; node="$(jq -r .node_id <<<"$answer")"; body="$(jq -r .body <<<"$answer")"
     if [[ "$passed" == "true" ]]; then reply "$id" "✅ This quiz has already been passed."; continue; fi
@@ -180,11 +211,7 @@ cmd_sync() {
     if (( ${#given} != n )); then
       reply "$id" "⚠️ Expected $n answers but got ${#given}. This did not count as an attempt."; continue
     fi
-    if [[ ! -f "$tmp/key.pem" ]]; then (umask 077 && printf '%s\n' "${PR_QUIZ_PRIVATE_KEY:-}" >"$tmp/key.pem"); fi
-    if ! result="$(cmd_check_answers "$tmp/payload.json" "$given" "$tmp/key.pem")"; then
-      reply "$id" "⚠️ This quiz can't be graded: its answer key could not be decrypted or doesn't match this PR (for example after a key rotation). Ask the author to publish a new quiz. This did not count as an attempt."
-      broken=true; break
-    fi
+    result="$(cmd_check_answers "$tmp/payload.json" "$given" "$tmp/key.pem")"
     attempts=$((attempts + 1))
     passed="$(jq -r .passed <<<"$result")"
     if [[ "$passed" == "true" ]]; then
@@ -199,13 +226,10 @@ cmd_sync() {
   done 3< <(jq -c '.[]' <<<"$answers")
   rm -f "$tmp/key.pem"
 
-  if $broken; then
-    upsert_check "$head" '{"status":"completed","conclusion":"failure"}' "Quiz can't be graded" "The answer key could not be decrypted. Publish a new quiz."
-    die "the answer key of quiz $quiz_id could not be decrypted or verified"
-  elif [[ "$passed" == "true" ]]; then
+  if [[ "$passed" == "true" ]]; then
     upsert_check "$head" '{"status":"completed","conclusion":"success"}' "Quiz passed" "$(cat "$out/summary.md")"
   elif (( attempts >= MAX_ATTEMPTS )); then
-    upsert_check "$head" '{"status":"completed","conclusion":"failure"}' "Quiz not passed, no attempts left" "Publish a new quiz to try again."$'\n\n'"$(cat "$out/summary.md")"
+    fail_check "$head" "Quiz not passed, no attempts left" "Publish a new quiz to try again."$'\n\n'"$(cat "$out/summary.md")"
   else
     upsert_check "$head" '{"status":"in_progress"}' \
       "$(if (( attempts == 0 )); then echo "Waiting for a reviewer to pass the quiz"; else echo "Not passed yet ($attempts of $MAX_ATTEMPTS attempts used)"; fi)" \

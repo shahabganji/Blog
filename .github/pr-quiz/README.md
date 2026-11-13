@@ -23,7 +23,9 @@ reviewer reads the summary, comments "/quiz B C" ─▶ sync: grade every answer
 - A failed attempt is only reported as "not passed", without a score, so the score can't be used to narrow down guesses. After a pass, the answer comment is minimized.
 - `sync` is idempotent. It works from the comment history: each answer gets exactly one reply, and the check is derived from the recorded results. When answers arrive while a run is busy, the concurrency group may cancel a queued run, but the next run grades the skipped answers. Re-running a workflow never resets a pass.
 - A new push changes the head commit, which has no `pr-quiz` check yet. The PR is blocked again until a fresh quiz is published and passed.
-- If the answer key can't be decrypted (for example after `setup.sh --rotate`), the reviewer gets a reply, the check fails, and the run fails. Publish a new quiz to recover.
+- Only the latest quiz counts. An answer to a quiz that was replaced before it was graded gets a reply asking to answer the latest quiz, and doesn't use an attempt.
+- If the latest quiz is invalid, or its answer key can't be decrypted (for example after `setup.sh --rotate`), the check fails, even if an earlier quiz on the same commit passed. Pending answers get a reply and the run fails. Publish a new quiz to recover. The key is re-checked on every run until the quiz is passed, so a re-run doesn't hide the problem.
+- The `pr-quiz` check belongs to the head commit, not the PR. If another open PR has the same head commit, the check fails until that PR is closed; then re-run the check or answer again.
 
 ## Files
 
