@@ -90,8 +90,9 @@ if [[ -n "${PULUMI_ACCESS_TOKEN:-}" ]]; then
   gh secret set PULUMI_ACCESS_TOKEN --repo "$REPO" --body "$PULUMI_ACCESS_TOKEN"
 fi
 
-# PRs into the deploy branch cannot be merged while the Copilot review is still running (its check is required)
-# or while any review conversation is unresolved. Copilot reviews every push automatically.
+# PRs into the deploy branch cannot be merged while the Copilot review is still running or while any review
+# conversation is unresolved. Copilot reviews every push automatically. The required check is the
+# copilot-review-gate workflow, because Copilot's own check is never reported on the PR.
 # Repo admins may bypass (direct pushes such as upstream syncs); on PRs that needs an explicit "bypass rules" tick.
 RULESET_NAME="${DEPLOY_BRANCH}: review before merge"
 GITHUB_ACTIONS_APP_ID=15368
@@ -113,7 +114,7 @@ RULESET_JSON="$(cat <<JSON
     { "type": "required_status_checks", "parameters": {
         "strict_required_status_checks_policy": false,
         "do_not_enforce_on_create": false,
-        "required_status_checks": [ { "context": "copilot-pull-request-reviewer", "integration_id": ${GITHUB_ACTIONS_APP_ID} } ] } },
+        "required_status_checks": [ { "context": "copilot-review-gate", "integration_id": ${GITHUB_ACTIONS_APP_ID} } ] } },
     { "type": "copilot_code_review", "parameters": { "review_on_push": true, "review_draft_pull_requests": false } }
   ]
 }

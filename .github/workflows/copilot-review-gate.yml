@@ -1,0 +1,53 @@
+# Required check for PRs into `shahab`: it stays pending until Copilot's code review of the PR head has finished.
+# Copilot's own `copilot-pull-request-reviewer` run is a dynamic workflow that GitHub does not report on the PR,
+# so requiring it directly would block every PR forever.
+name: copilot-review-gate
+
+on:
+  pull_request:
+    branches: [shahab]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  checks: read
+
+concurrency:
+  group: copilot-review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  copilot-review-gate:
+    name: copilot-review-gate
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Wait for the Copilot review of the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          START_TIMEOUT_SECONDS: 900
+        run: |
+          started_at=$(date +%s)
+          while :; do
+            latest=$(gh api "repos/${REPO}/commits/${SHA}/check-runs?check_name=copilot-pull-request-reviewer" \
+              --jq '.check_runs | sort_by(.started_at) | last | select(.) | "\(.status) \(.conclusion // "")"')
+            read -r status conclusion <<<"${latest}"
+            case "${status}" in
+              completed)
+                echo "Copilot review finished: ${conclusion}"
+                [[ "${conclusion}" == "success" ]] && exit 0
+                echo "::error::Copilot review did not succeed (${conclusion}); re-request it and re-run this job."
+                exit 1 ;;
+              "")
+                if (( $(date +%s) - started_at > START_TIMEOUT_SECONDS )); then
+                  echo "::error::Copilot review did not start for ${SHA}; request it on the PR and re-run this job."
+                  exit 1
+                fi
+                echo "Waiting for the Copilot review to start..." ;;
+              *)
+                echo "Copilot review is ${status}..." ;;
+            esac
+            sleep 20
+          done

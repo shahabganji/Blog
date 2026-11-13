@@ -75,10 +75,10 @@ Preview results are shown in the PR in two ways:
 
 Merging into `shahab` is blocked by a repository ruleset while:
 
-- the Copilot review is still running (its `copilot-pull-request-reviewer` check is required); or
+- the Copilot review is still running; or
 - any review conversation is unresolved.
 
-Copilot reviews every push automatically. Repo admins can still push directly, for example for upstream syncs. On a PR, an admin has to tick "bypass rules" explicitly to merge early.
+Copilot reviews every push automatically. The required check is `copilot-review-gate` (`.github/workflows/copilot-review-gate.yml`). It waits until Copilot's review of the PR head has finished. Copilot's own `copilot-pull-request-reviewer` check is never reported on the PR, so requiring it directly would block every PR. If Copilot hasn't started reviewing after 15 minutes, the gate fails. In that case, request a Copilot review on the PR and re-run the job. The gate runs the workflow file from the PR branch, so it guards against merging too early, not against a malicious PR that edits it. Repo admins can still push directly, for example for upstream syncs. On a PR, an admin has to tick "bypass rules" explicitly to merge early.
 
 Production deploys are guarded three ways:
 
