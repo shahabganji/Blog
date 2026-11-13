@@ -88,7 +88,7 @@ while :; do
       echo "$final"
       exit 0
     fi
-    continue
+    state="$final" waiting="the PR to settle (head or checks changed)"
   fi
   if (( elapsed >= WAIT_TIMEOUT )); then
     echo "timed out after ${elapsed}s waiting for: $waiting" >&2
