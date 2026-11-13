@@ -31,8 +31,12 @@ jobs:
         run: |
           started_at=$(date +%s)
           while :; do
-            latest=$(gh api "repos/${REPO}/commits/${SHA}/check-runs?check_name=copilot-pull-request-reviewer" \
-              --jq '.check_runs | sort_by(.started_at) | last | select(.) | "\(.status) \(.conclusion // "")"')
+            if ! latest=$(gh api "repos/${REPO}/commits/${SHA}/check-runs?check_name=copilot-pull-request-reviewer" \
+              --jq '.check_runs | sort_by(.started_at) | last | select(.) | "\(.status) \(.conclusion // "")"'); then
+              echo "::warning::Could not query the Copilot review status; retrying..."
+              sleep 20
+              continue
+            fi
             read -r status conclusion <<<"${latest}"
             case "${status}" in
               completed)
