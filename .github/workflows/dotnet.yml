@@ -2,12 +2,10 @@ name: dotnet
 
 on:
   push:
-    branches: [ master ]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
   pull_request:
-    branches: [ master ]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -17,6 +15,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-quality: preview
+        dotnet-version: |
+          11.0.x
+    - name: Restore dependencies
+      run: dotnet restore
+    # Analyzer rules are enforced by the Release build (warnings are errors there), so only whitespace and style are checked here.
+    - name: Check formatting
+      run: |
+        status=0
+        dotnet format whitespace --verify-no-changes || status=1
+        dotnet format style --verify-no-changes --no-restore || status=1
+        if [ "$status" -ne 0 ]; then
+          echo "::error::Formatting is off. Run 'dotnet format whitespace && dotnet format style' and commit the result."
+        fi
+        exit "$status"
+
   build:
 
     runs-on: ${{ matrix.os }}
