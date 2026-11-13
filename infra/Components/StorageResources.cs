@@ -35,9 +35,6 @@ internal sealed class StorageResources
             {
                 DefaultAction = DefaultAction.Allow,
                 Bypass = Bypass.AzureServices,
-                IpRules = settings.StorageAllowedIps.Apply(ips => ips
-                    .Select(ip => new IPRuleArgs { IPAddressOrRange = ip, Action = Pulumi.AzureNative.Storage.Action.Allow })
-                    .ToList()),
             },
             Encryption = new EncryptionArgs
             {
@@ -50,7 +47,11 @@ internal sealed class StorageResources
                 },
             },
             Tags = Tags.LegacyPurposeKey,
-        }, BlogResourceOptions.For(settings, accountId));
+        }, BlogResourceOptions.For(
+            settings,
+            accountId,
+            // Personal client-IP allow rules are maintained manually and are not managed here.
+            ignoreChanges: ["networkRuleSet.ipRules"]));
 
         BlobService = new BlobServiceProperties("codechef-blob-service", new BlobServicePropertiesArgs
         {

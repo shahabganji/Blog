@@ -21,7 +21,6 @@ internal sealed class DatabaseResources
             Location = settings.Location,
             Version = "12.0",
             AdministratorLogin = "shahab",
-            AdministratorLoginPassword = settings.SqlAdminPassword,
             MinimalTlsVersion = "1.2",
             PublicNetworkAccess = ServerPublicNetworkAccessFlag.Enabled,
             RestrictOutboundNetworkAccess = ServerNetworkAccessFlag.Disabled,
@@ -29,7 +28,7 @@ internal sealed class DatabaseResources
         }, BlogResourceOptions.For(
             settings,
             serverId,
-            // Azure never returns the password; it is only sent when the server is (re)created.
+            // The admin password is managed outside Pulumi (Azure never returns it).
             // Entra admins are managed by the dedicated ServerAzureADAdministrator resource below.
             ignoreChanges: ["administratorLoginPassword", "administrators"]));
 
@@ -44,12 +43,16 @@ internal sealed class DatabaseResources
             TenantId = "0c05d0ea-d039-4300-9bb4-66ee8ceb4e7c",
         }, BlogResourceOptions.For(settings, $"{serverId}/administrators/ActiveDirectory"));
 
-        FirewallRules.Add(CreateFirewallRule(settings, resourceGroupName, serverId, "AllowAllWindowsAzureIps", Output.Create("0.0.0.0")));
-        foreach (var ruleName in (string[])["HOME_IP", "SHQUER_HOME_IP"])
+        // Personal client-IP rules (HOME_IP, SHQUER_HOME_IP) are maintained manually and are not managed here.
+        AllowAzureServicesRule = new FirewallRule("codechef-fw-AllowAllWindowsAzureIps", new FirewallRuleArgs
         {
-            var ip = Output.CreateSecret(settings.SqlFirewallIps.Apply(ips => ips[ruleName]));
-            FirewallRules.Add(CreateFirewallRule(settings, resourceGroupName, serverId, ruleName, ip));
-        }
+            ResourceGroupName = resourceGroupName,
+            ServerName = Server.Name,
+            FirewallRuleName = "AllowAllWindowsAzureIps",
+            Name = "AllowAllWindowsAzureIps",
+            StartIpAddress = "0.0.0.0",
+            EndIpAddress = "0.0.0.0",
+        }, BlogResourceOptions.For(settings, $"{serverId}/firewallRules/AllowAllWindowsAzureIps"));
 
         Database = new Database(DatabaseName, new DatabaseArgs
         {
@@ -75,18 +78,7 @@ internal sealed class DatabaseResources
 
     public ServerAzureADAdministrator EntraAdministrator { get; }
 
-    public List<FirewallRule> FirewallRules { get; } = [];
+    public FirewallRule AllowAzureServicesRule { get; }
 
     public Database Database { get; }
-
-    private FirewallRule CreateFirewallRule(StackSettings settings, Output<string> resourceGroupName, string serverId, string ruleName, Output<string> ip) =>
-        new($"codechef-fw-{ruleName}", new FirewallRuleArgs
-        {
-            ResourceGroupName = resourceGroupName,
-            ServerName = Server.Name,
-            FirewallRuleName = ruleName,
-            Name = ruleName,
-            StartIpAddress = ip,
-            EndIpAddress = ip,
-        }, BlogResourceOptions.For(settings, $"{serverId}/firewallRules/{ruleName}"));
 }

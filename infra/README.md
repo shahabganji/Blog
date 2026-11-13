@@ -9,7 +9,7 @@ resource group `blog`). State lives in Pulumi Cloud: `shahabganji/blog-infra/pro
 |---|---|
 | Resource group (`Components/ResourceGroupResources.cs`) | `blog` |
 | Monitoring (`Components/MonitoringResources.cs`) | App Insights `codechef`, action group `Application Insights Smart Detection` |
-| Database (`Components/DatabaseResources.cs`) | SQL server `codechef`, Entra admin `SQL-DBA`, firewall rules, database `code_chef_blog` |
+| Database (`Components/DatabaseResources.cs`) | SQL server `codechef`, Entra admin `SQL-DBA`, firewall rule `AllowAllWindowsAzureIps`, database `code_chef_blog` |
 | Storage (`Components/StorageResources.cs`) | storage account `codechef` (custom domain `images.shahab-the-guy.dev`), blob service settings, container `blog`, lifecycle policy, static website |
 | Web (`Components/WebAppResources.cs`) | App Service plan `codechef` (B1 Linux), web app `codechef`, app settings, custom domain bindings, SCM/FTP basic auth policies |
 
@@ -18,6 +18,12 @@ Every resource is `protect`ed, so Pulumi refuses to delete or replace it. The re
 
 Not managed: App Service managed certificates (Azure renews them, so binding `sslState`/`thumbprint` changes are ignored), the
 `shahab-the-guy.dev` DNS zone, Key Vault and the Log Analytics workspace (all in RG `default`), and the system `master` database.
+
+Also maintained manually and kept out of Pulumi, so the public repository holds no secrets or personal IPs:
+
+- the SQL admin password: never sent, and changes are ignored;
+- the personal client-IP SQL firewall rules `HOME_IP` / `SHQUER_HOME_IP`;
+- the storage firewall IP allow rules (`networkRuleSet.ipRules` is ignored).
 
 ## Usage
 
@@ -36,12 +42,7 @@ pulumi up
 |---|---|
 | `azure-native:subscriptionId` / `azure-native:location` | Target subscription / default region |
 | `appInsightsWorkspaceResourceId` | Log Analytics workspace App Insights is linked to (see follow-ups) |
-| `sqlAdminPassword` (secret) | SQL admin password. Only sent when the server is created; changes are ignored |
-| `sqlFirewallIps.<RULE>` (secret) | IPs for the `HOME_IP` / `SHQUER_HOME_IP` SQL firewall rules |
-| `storageAllowedIps[n]` (secret) | IP rules of the storage firewall |
 | `importExisting` (default `false`) | Adopt resources from Azure (`ImportId`) instead of creating them |
-
-The IPs are secrets because this repository is public, for example `pulumi config set --secret --path sqlFirewallIps.HOME_IP 1.2.3.4`.
 
 ### How the resources were adopted
 
@@ -116,7 +117,7 @@ The script does the following:
 
 `PULUMI_ACCESS_TOKEN` is a repo secret because previews need it to read the state, so any same-repo branch can use it. Forks
 can't, and Copilot agent PRs need your approval before workflows run. The token cannot write to Azure (the preview identity is
-read-only), but it can read the stack's decrypted config. Only give write access to the repo to people you trust with that.
+read-only), but it can read the stack state, including secret values such as the App Insights connection string. Only give write access to the repo to people you trust with that.
 
 ## Known follow-ups (intentionally not changed)
 
