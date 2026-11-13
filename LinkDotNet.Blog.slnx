@@ -11,6 +11,9 @@
     <File Path="MIGRATION.md" />
     <File Path="Readme.md" />
   </Folder>
+  <Folder Name="/infra/">
+    <Project Path="infra/Blog.Infra.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <File Path="src/.editorconfig" />
     <File Path="src/Directory.Build.props" />

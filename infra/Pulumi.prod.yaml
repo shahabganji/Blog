@@ -1,0 +1,4 @@
+config:
+  azure-native:subscriptionId: 5d390e2c-41b3-489d-81aa-f4f09fb29fe8
+  azure-native:location: westeurope
+  blog-infra:appInsightsWorkspaceResourceId: /subscriptions/5d390e2c-41b3-489d-81aa-f4f09fb29fe8/resourceGroups/DefaultResourceGroup-WEU/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-5d390e2c-41b3-489d-81aa-f4f09fb29fe8-WEU

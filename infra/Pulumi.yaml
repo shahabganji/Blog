@@ -1,0 +1,3 @@
+name: blog-infra
+description: Azure infrastructure for the shahab-the-guy.dev blog (resource group "blog")
+runtime: dotnet
