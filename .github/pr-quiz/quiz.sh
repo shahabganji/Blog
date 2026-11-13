@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# PR comprehension quiz engine, shared by the pr-review-loop skill (build) and .github/workflows/pr-quiz.yml (publish, grade).
+# PR comprehension quiz engine, shared by the pr-review-loop skill (build) and .github/workflows/pr-quiz.yml (sync).
 #
 #   quiz.sh validate <quiz.json>                                     check a private quiz spec (with answers)
 #   quiz.sh build <quiz.json> <pr> <head-sha> <pr-url> [html-out]    print the PR comment body; optionally write the HTML page
 #   quiz.sh check-answers <payload.json> <answers> <private-key>     grade answers against the encrypted key (prints JSON)
 #   quiz.sh parse-answers <comment-body>                             normalise "/quiz B C A" -> "BCA" (exit 1 if malformed)
-#   quiz.sh publish                                                  CI: a quiz comment was posted -> pending pr-quiz check + HTML
-#   quiz.sh grade                                                    CI: a "/quiz ..." comment was posted -> grade, report, update check
+#   quiz.sh sync                                                     CI: grade new "/quiz ..." answers and update the pr-quiz check
 #
 # The answers never appear in clear text: they are encrypted with public.pem (RSA-OAEP) together with the PR number and head SHA,
 # and only the pr-quiz workflow (environment "pr-quiz", secret PR_QUIZ_PRIVATE_KEY) can decrypt them.
@@ -15,6 +14,7 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PASS_MARK=90
 MAX_ATTEMPTS=3
+MIN_QUESTIONS=2
 MAX_QUESTIONS=5
 CHECK_NAME="pr-quiz"
 PUBLIC_KEY="${QUIZ_PUBLIC_KEY:-$DIR/public.pem}"
@@ -26,10 +26,10 @@ TRUSTED='["OWNER","MEMBER","COLLABORATOR"]'
 die() { echo "error: $*" >&2; exit 1; }
 
 validation_errors() { # $1 spec file, $2 "private" | "public"
-  jq -r --arg mode "$2" --argjson max "$MAX_QUESTIONS" '
+  jq -r --arg mode "$2" --argjson min "$MIN_QUESTIONS" --argjson max "$MAX_QUESTIONS" '
     def need($f): if ((.[$f] // "") | tostring | length) == 0 then "\($f) is required" else empty end;
     need("title"), need("tldr"), need("why"), need("intent"),
-    (if (.questions | type) != "array" or (.questions | length) == 0 then "at least one question is required" else empty end),
+    (if (.questions | type) != "array" or (.questions | length) < $min then "at least \($min) questions are required (one question can be guessed)" else empty end),
     (if (.questions // [] | length) > $max then "more than \($max) questions: the PR is too big, split it instead" else empty end),
     (if $mode == "public" and ((.ciphertext // "") == "") then "ciphertext is missing" else empty end),
     (.questions // [] | to_entries[] | .key as $i | .value |
@@ -91,104 +91,127 @@ cmd_check_answers() { # $1 payload file, $2 answers, $3 private key file
     | {correct: $correct, total: $total, score: (($correct * 100 / $total) | floor), passed: ($correct * 100 >= $pass * $total)}'
 }
 
-# ---------- CI helpers (GH_TOKEN, REPO, PR, COMMENT_BODY, RUN_URL are set by the workflow) ----------
+# ---------- CI (GH_TOKEN, REPO, PR, RUN_URL, PR_QUIZ_PRIVATE_KEY and optionally OUT_DIR are set by the workflow) ----------
+#
+# "sync" is idempotent: it re-reads every comment on the PR, grades each "/quiz" answer that has no result reply yet and then
+# derives the pr-quiz check from the recorded results. A run that is cancelled or re-run therefore loses or repeats nothing.
 
-comment() { gh api "repos/$REPO/issues/$PR/comments" -f body="$1" >/dev/null; }
+reply() { # $1 answer comment id, $2 text, $3 extra marker fields (optional)
+  gh api "repos/$REPO/issues/$PR/comments" -f body="$2"$'\n\n'"${RESULT_MARKER}answer=$1${3:+ $3} -->" >/dev/null
+}
 
-upsert_check() { # $1 sha, $2 JSON fields (status/conclusion/output)
-  local id
+upsert_check() { # $1 sha, $2 status/conclusion JSON, $3 title, $4 summary
+  local id fields
+  fields="$(jq -c --arg title "$3" --arg summary "$4" --arg url "$RUN_URL" \
+    '. + {details_url: $url, output: {title: $title, summary: $summary}}' <<<"$2")"
   id="$(gh api "repos/$REPO/commits/$1/check-runs?check_name=$CHECK_NAME&filter=latest" \
     --jq "[.check_runs[] | select(.app.id == $GITHUB_ACTIONS_APP_ID)][0].id // empty")"
   if [[ -n "$id" ]]; then
-    jq -c --arg url "$RUN_URL" '. + {details_url: $url}' <<<"$2" | gh api --method PATCH "repos/$REPO/check-runs/$id" --input - >/dev/null
+    gh api --method PATCH "repos/$REPO/check-runs/$id" --input - >/dev/null <<<"$fields"
   else
-    jq -c --arg name "$CHECK_NAME" --arg sha "$1" --arg url "$RUN_URL" '. + {name: $name, head_sha: $sha, details_url: $url}' <<<"$2" \
+    jq -c --arg name "$CHECK_NAME" --arg sha "$1" '. + {name: $name, head_sha: $sha}' <<<"$fields" \
       | gh api --method POST "repos/$REPO/check-runs" --input - >/dev/null
   fi
 }
 
-check_fields() { # $1 status/conclusion JSON, $2 title, $3 summary
-  jq -c --arg title "$2" --arg summary "$3" '. + {output: {title: $title, summary: $summary}}' <<<"$1"
-}
+cmd_sync() {
+  local out="${OUT_DIR:-.}" head quiz quiz_id errors answers attempts passed broken=false
+  local id node body given n result
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" --jq '.[]' | jq -s 'sort_by(.id)' >"$tmp/comments.json"
+  head="$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)"
 
-pr_head() { gh api "repos/$REPO/pulls/$PR" --jq .head.sha; }
-
-cmd_publish() {
-  local payload errors head out="${OUT_DIR:-.}"
-  payload="$(payload_from_body <<<"$COMMENT_BODY")" || true
-  [[ -n "$payload" ]] || die "comment has no quiz payload"
-  printf '%s' "$payload" >"$out/payload.json"
-  errors="$(validation_errors "$out/payload.json" public)"
-  [[ -z "$errors" ]] || die "invalid quiz payload:"$'\n'"$errors"
-  [[ "$(jq -r .pr "$out/payload.json")" == "$PR" ]] || die "quiz payload is for another PR"
-  head="$(pr_head)"
-  if [[ "$(jq -r .head_sha "$out/payload.json")" != "$head" ]]; then
-    echo "::notice::Quiz is for an older commit than the PR head ($head); ignoring it."
-    exit 0
-  fi
-  # Re-apply the server-side constants: the publisher cannot lower the pass mark or raise the attempt limit.
-  public_spec "$out/payload.json" "$PR" "$head" "$(jq -r .pr_url "$out/payload.json")" >"$out/public.json"
-  jq -r -f "$DIR/render-markdown.jq" "$out/public.json" >"$out/summary.md"
-  jq -r -f "$DIR/render-html.jq" "$out/public.json" >"$out/pr-$PR-summary.html"
-  [[ -n "${GITHUB_STEP_SUMMARY:-}" ]] && cat "$out/summary.md" >>"$GITHUB_STEP_SUMMARY"
-  upsert_check "$head" "$(check_fields '{"status":"in_progress"}' "Waiting for a reviewer to pass the quiz" "$(cat "$out/summary.md")")"
-  [[ -n "${GITHUB_OUTPUT:-}" ]] && echo "html=$out/pr-$PR-summary.html" >>"$GITHUB_OUTPUT"
-  echo "Published quiz for PR #$PR at $head"
-}
-
-cmd_grade() {
-  local answers comments quiz quiz_id head results attempts n result passed score text status
-  if ! answers="$(cmd_parse_answers "$COMMENT_BODY")"; then
-    comment "⚠️ Could not read your answers. Use one letter per question, in order, for example \`/quiz B C A\`."
-    return 0
-  fi
-  comments="$(gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" --jq '.[]' | jq -s .)"
   quiz="$(jq -c --arg m "$MARKER" --argjson trusted "$TRUSTED" \
-    '[.[] | select((.author_association as $a | $trusted | index($a)) and (.body | contains($m)))] | last // empty' <<<"$comments")"
-  if [[ -z "$quiz" ]]; then comment "⚠️ There is no quiz on this PR yet."; return 0; fi
-  quiz_id="$(jq -r .id <<<"$quiz")"
-  tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-  payload_from_body <<<"$(jq -r .body <<<"$quiz")" >"$tmp/payload.json"
-  head="$(pr_head)"
-  if [[ "$(jq -r .head_sha "$tmp/payload.json")" != "$head" ]]; then
-    comment "⚠️ The latest quiz covers commit \`$(jq -r '.head_sha[0:8]' "$tmp/payload.json")\`, but the PR now points at \`${head:0:8}\`. Wait for an updated quiz."
-    return 0
-  fi
-  results="$(jq -c --arg m "${RESULT_MARKER}quiz=$quiz_id " \
-    '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains($m))) | .body]' <<<"$comments")"
-  if jq -e 'any(.[]; contains("passed=true"))' <<<"$results" >/dev/null; then comment "✅ This quiz has already been passed."; return 0; fi
-  attempts="$(jq length <<<"$results")"
-  if (( attempts >= MAX_ATTEMPTS )); then
-    comment "⛔ No attempts left for this quiz ($MAX_ATTEMPTS used). Re-read the summary and ask the author to publish a new quiz."
-    return 0
-  fi
-  n="$(jq '.questions | length' "$tmp/payload.json")"
-  if (( ${#answers} != n )); then comment "⚠️ Expected $n answers but got ${#answers}. This did not count as an attempt."; return 0; fi
+    '[.[] | select((.author_association as $a | $trusted | index($a)) and (.body | contains($m)))] | last // empty' "$tmp/comments.json")"
+  quiz_id=0
+  if [[ -n "$quiz" ]]; then quiz_id="$(jq -r .id <<<"$quiz")"; fi
 
-  umask 077
-  printf '%s\n' "$PR_QUIZ_PRIVATE_KEY" >"$tmp/key.pem"
-  result="$(cmd_check_answers "$tmp/payload.json" "$answers" "$tmp/key.pem")"
+  # Unanswered "/quiz" comments from trusted authors, posted after the current quiz.
+  answers="$(jq -c --argjson trusted "$TRUSTED" --argjson after "$quiz_id" --arg r "$RESULT_MARKER" '
+    [.[] | select(.user.login == "github-actions[bot]") | .body | capture("\($r)answer=(?<id>[0-9]+)")? | .id | tonumber] as $done
+    | [.[] | select((.author_association as $a | $trusted | index($a)) and (.body | test("^\\s*/quiz"; "i"))
+                    and .id > $after and (.id as $id | $done | index($id) | not))
+         | {id, node_id, login: .user.login, body}]' "$tmp/comments.json")"
+
+  if [[ -z "$quiz" ]]; then
+    jq -r '.[].id' <<<"$answers" | while read -r id; do reply "$id" "⚠️ There is no quiz on this PR yet."; done
+    return 0
+  fi
+
+  payload_from_body <<<"$(jq -r .body <<<"$quiz")" >"$tmp/payload.json" || true
+  errors="$(validation_errors "$tmp/payload.json" public 2>&1 || echo "payload is not valid JSON")"
+  if [[ -z "$errors" && "$(jq -r .pr "$tmp/payload.json")" != "$PR" ]]; then errors="the quiz was built for another PR"; fi
+  if [[ -n "$errors" ]]; then
+    jq -r '.[].id' <<<"$answers" | while read -r id; do reply "$id" "⚠️ The latest quiz is invalid and can't be graded. Ask the author to publish a new one."; done
+    die "invalid quiz in comment $quiz_id:"$'\n'"$errors"
+  fi
+
+  if [[ "$(jq -r .head_sha "$tmp/payload.json")" != "$head" ]]; then
+    jq -r '.[].id' <<<"$answers" | while read -r id; do
+      reply "$id" "⚠️ The latest quiz covers commit \`$(jq -r '.head_sha[0:8]' "$tmp/payload.json")\`, but the PR now points at \`${head:0:8}\`. Wait for an updated quiz."
+    done
+    echo "::notice::The latest quiz is for an older commit than the PR head ($head); nothing to grade."
+    return 0
+  fi
+
+  # Re-apply the server-side constants: a quiz comment cannot lower the pass mark or raise the attempt limit.
+  public_spec "$tmp/payload.json" "$PR" "$head" "$(jq -r .pr_url "$tmp/payload.json")" >"$tmp/public.json"
+  jq -r -f "$DIR/render-markdown.jq" "$tmp/public.json" >"$out/summary.md"
+  jq -r -f "$DIR/render-html.jq" "$tmp/public.json" >"$out/pr-$PR-summary.html"
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then cat "$out/summary.md" >>"$GITHUB_STEP_SUMMARY"; fi
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then echo "html=$out/pr-$PR-summary.html" >>"$GITHUB_OUTPUT"; fi
+
+  read -r attempts passed < <(jq -r --arg r "$RESULT_MARKER" --arg q "$quiz_id" '
+    [.[] | select(.user.login == "github-actions[bot]") | .body
+     | capture("\($r)answer=[0-9]+ quiz=(?<quiz>[0-9]+) sha=[0-9a-f]+ attempt=[0-9]+ passed=(?<passed>true|false)")? | select(.quiz == $q)]
+    | "\(length) \(any(.passed == "true"))"' "$tmp/comments.json")
+  n="$(jq '.questions | length' "$tmp/payload.json")"
+
+  while read -r answer <&3; do
+    id="$(jq -r .id <<<"$answer")"; node="$(jq -r .node_id <<<"$answer")"; body="$(jq -r .body <<<"$answer")"
+    if [[ "$passed" == "true" ]]; then reply "$id" "✅ This quiz has already been passed."; continue; fi
+    if (( attempts >= MAX_ATTEMPTS )); then
+      reply "$id" "⛔ No attempts left for this quiz. Re-read the summary and ask the author to publish a new quiz."; continue
+    fi
+    if ! given="$(cmd_parse_answers "$body")"; then
+      reply "$id" "⚠️ Could not read your answers. Use one letter per question, in order, for example \`/quiz B C A\`. This did not count as an attempt."; continue
+    fi
+    if (( ${#given} != n )); then
+      reply "$id" "⚠️ Expected $n answers but got ${#given}. This did not count as an attempt."; continue
+    fi
+    if [[ ! -f "$tmp/key.pem" ]]; then (umask 077 && printf '%s\n' "${PR_QUIZ_PRIVATE_KEY:-}" >"$tmp/key.pem"); fi
+    if ! result="$(cmd_check_answers "$tmp/payload.json" "$given" "$tmp/key.pem")"; then
+      reply "$id" "⚠️ This quiz can't be graded: its answer key could not be decrypted or doesn't match this PR (for example after a key rotation). Ask the author to publish a new quiz. This did not count as an attempt."
+      broken=true; break
+    fi
+    attempts=$((attempts + 1))
+    passed="$(jq -r .passed <<<"$result")"
+    if [[ "$passed" == "true" ]]; then
+      reply "$id" "✅ @$(jq -r .login <<<"$answer") passed the quiz ($(jq -r .score <<<"$result")%)." "quiz=$quiz_id sha=$head attempt=$attempts passed=true"
+      # Hide the correct answers from later reviewers. Best effort only.
+      gh api graphql -f id="$node" \
+        -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) { clientMutationId } }' >/dev/null || true
+    else
+      # Only pass/fail is reported: a per-attempt score would tell the reviewer how many guesses were right.
+      reply "$id" "❌ Not passed. The pass mark is ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts))." "quiz=$quiz_id sha=$head attempt=$attempts passed=false"
+    fi
+  done 3< <(jq -c '.[]' <<<"$answers")
   rm -f "$tmp/key.pem"
-  attempts=$((attempts + 1))
-  passed="$(jq -r .passed <<<"$result")"
-  score="$(jq -r '"\(.correct)/\(.total) (\(.score)%)"' <<<"$result")"
-  if [[ "$passed" == "true" ]]; then
-    text="✅ @${ACTOR} passed the quiz: $score."
-    upsert_check "$head" "$(check_fields '{"status":"completed","conclusion":"success"}' "Passed: $score" "Passed by @$ACTOR on attempt $attempts.")"
+
+  if $broken; then
+    upsert_check "$head" '{"status":"completed","conclusion":"failure"}' "Quiz can't be graded" "The answer key could not be decrypted. Publish a new quiz."
+    die "the answer key of quiz $quiz_id could not be decrypted or verified"
+  elif [[ "$passed" == "true" ]]; then
+    upsert_check "$head" '{"status":"completed","conclusion":"success"}' "Quiz passed" "$(cat "$out/summary.md")"
   elif (( attempts >= MAX_ATTEMPTS )); then
-    text="❌ $score. The pass mark is ${PASS_MARK}% and no attempts are left."
-    upsert_check "$head" "$(check_fields '{"status":"completed","conclusion":"failure"}' "Failed: $score" "No attempts left. A new quiz is needed.")"
+    upsert_check "$head" '{"status":"completed","conclusion":"failure"}' "Quiz not passed, no attempts left" "Publish a new quiz to try again."$'\n\n'"$(cat "$out/summary.md")"
   else
-    status="$(check_fields '{"status":"in_progress"}' "Attempt $attempts scored $score" "Pass mark ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts)).")"
-    text="❌ $score. The pass mark is ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts))."
-    upsert_check "$head" "$status"
+    upsert_check "$head" '{"status":"in_progress"}' \
+      "$(if (( attempts == 0 )); then echo "Waiting for a reviewer to pass the quiz"; else echo "Not passed yet ($attempts of $MAX_ATTEMPTS attempts used)"; fi)" \
+      "Answer with a \`/quiz …\` PR comment."$'\n\n'"$(cat "$out/summary.md")"
   fi
-  comment "$text"$'\n\n'"${RESULT_MARKER}quiz=$quiz_id sha=$head attempt=$attempts passed=$passed -->"
-  if [[ "$passed" == "true" && -n "${COMMENT_NODE_ID:-}" ]]; then
-    # Hide the correct answers from later reviewers. Best effort only.
-    gh api graphql -f id="$COMMENT_NODE_ID" \
-      -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) { clientMutationId } }' >/dev/null || true
-  fi
+  echo "PR #$PR quiz $quiz_id at $head: attempts=$attempts passed=$passed"
 }
 
 case "${1:-}" in
@@ -196,7 +219,6 @@ case "${1:-}" in
   build) shift; cmd_build "$@" ;;
   check-answers) shift; cmd_check_answers "$@" ;;
   parse-answers) shift; cmd_parse_answers "$@" ;;
-  publish) cmd_publish ;;
-  grade) cmd_grade ;;
+  sync) cmd_sync ;;
   *) sed -n '2,10p' "$0" >&2; exit 2 ;;
 esac

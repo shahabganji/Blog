@@ -1,28 +1,24 @@
 #!/usr/bin/env bash
 # Replies to a review thread and optionally resolves it.
 #
-#   reply-thread.sh <pr> <first-comment-id> <body-file | -> [--resolve]
+#   reply-thread.sh <pr> <first_comment_id> <body-file | -> [--resolve <thread_id>]
 #
-# <first-comment-id> is "first_comment_id" from pr-state.sh. The body is read from a file (or stdin with "-") so that
-# Markdown with backticks never passes through the shell.
+# Both ids come from pr-state.sh (unresolved_threads[].first_comment_id and .thread_id). The body is read from a file
+# (or stdin with "-") so that Markdown with backticks never passes through the shell.
 set -euo pipefail
 
-PR="${1:?usage: reply-thread.sh <pr> <first-comment-id> <body-file|-> [--resolve]}"
-COMMENT_ID="${2:?missing comment id}"
-BODY="${3:?missing body file}"
-RESOLVE="${4:-}"
+usage="usage: reply-thread.sh <pr> <first_comment_id> <body-file|-> [--resolve <thread_id>]"
+PR="${1:?$usage}"
+COMMENT_ID="${2:?$usage}"
+BODY="${3:?$usage}"
 REPO="${REPO:-$(git remote get-url origin | sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##')}"
+THREAD_ID=""
+if [[ "${4:-}" == "--resolve" ]]; then THREAD_ID="${5:?$usage}"; elif [[ -n "${4:-}" ]]; then echo "$usage" >&2; exit 2; fi
 
 [[ "$BODY" == "-" ]] && BODY=/dev/stdin
 gh api "repos/$REPO/pulls/$PR/comments/$COMMENT_ID/replies" -F body=@"$BODY" --jq '"replied: \(.html_url)"'
 
-if [[ "$RESOLVE" == "--resolve" ]]; then
-  thread="$(gh api graphql -F owner="${REPO%/*}" -F name="${REPO#*/}" -F pr="$PR" -f query='
-    query($owner: String!, $name: String!, $pr: Int!) {
-      repository(owner: $owner, name: $name) { pullRequest(number: $pr) { reviewThreads(first: 100) { nodes {
-        id comments(first: 1) { nodes { databaseId } } } } } } }' \
-    --jq ".data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].databaseId == $COMMENT_ID) | .id")"
-  [[ -n "$thread" ]] || { echo "no thread starts with comment $COMMENT_ID" >&2; exit 1; }
-  gh api graphql -f id="$thread" -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }' \
+if [[ -n "$THREAD_ID" ]]; then
+  gh api graphql -f id="$THREAD_ID" -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }' \
     --jq '"resolved: \(.data.resolveReviewThread.thread.isResolved)"'
 fi

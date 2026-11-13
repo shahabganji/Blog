@@ -23,5 +23,5 @@ def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
 + "\n\n---\n"
 + "Answer with a PR comment containing one letter per question, in order, for example `/quiz "
 + ([range(0; .questions | length)] | map(letter(. % 4)) | join(" "))
-+ "`. You get \(.max_attempts) attempts per commit. The `pr-quiz` check passes at \(.pass_mark)% or higher.\n"
++ "`. You get \(.max_attempts) attempts per quiz. The `pr-quiz` check passes at \(.pass_mark)% or higher.\n"
 + "_Summary for commit \(.head_sha[0:8]). It is regenerated if the PR changes._\n"

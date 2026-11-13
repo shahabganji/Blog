@@ -11,8 +11,8 @@ Helper scripts (run from the repository root):
 
 | Script | Purpose |
 |---|---|
-| `.github/skills/pr-review-loop/scripts/pr-state.sh <pr> [--wait]` | JSON snapshot: head SHA, Copilot/Gitar review status, pending/failing checks, unresolved threads, latest bot comments, `ready_for_quiz`. `--wait` blocks until the PR has settled for its head commit. |
-| `.github/skills/pr-review-loop/scripts/reply-thread.sh <pr> <first_comment_id> <body-file> [--resolve]` | Reply to a review thread (body from a file, never inline) and optionally resolve it. |
+| `.github/skills/pr-review-loop/scripts/pr-state.sh <pr> [--wait]` | JSON snapshot: head SHA, Copilot/Gitar review status, `missing_reviews`, pending/failing checks, unresolved threads (with `thread_id` and `first_comment_id`), latest bot comments, `ready_for_quiz`. `--wait` blocks until the PR has settled for its head commit. Set `REQUIRED_BOTS` (default `"copilot gitar"`) if a repository has only one of them. |
+| `.github/skills/pr-review-loop/scripts/reply-thread.sh <pr> <first_comment_id> <body-file> [--resolve <thread_id>]` | Reply to a review thread (body from a file, never inline) and optionally resolve it. |
 | `.github/skills/pr-review-loop/scripts/publish-quiz.sh <pr> <quiz.json> [--dry-run]` | Post the summary + quiz comment and write the HTML summary. |
 
 The quiz engine, renderers and grading workflow are documented in `.github/pr-quiz/README.md`.
@@ -36,6 +36,8 @@ Repeat, with at most **10 iterations**. If you hit the cap, stop and report what
 7. Go back to step 1.
 
 The loop is done when `ready_for_quiz` is `true`: no unresolved threads, no pending or failing checks (ignoring `pr-quiz`), and Copilot and Gitar have finished reviewing the head commit.
+
+If `missing_reviews` is not empty after `--wait` returns, a bot never reviewed the head commit. For Copilot, re-request the review (`gh api repos/<owner>/<repo>/pulls/<pr>/requested_reviewers -f "reviewers[]=copilot-pull-request-reviewer[bot]"`) and wait again. For Gitar, or if Copilot still does not review, ask the user.
 
 ## 3. Triage rules for review comments
 
@@ -79,10 +81,10 @@ When `ready_for_quiz` is `true`, write `quiz.json` in the session workspace (see
 | `risks` | Known risks, limitations and follow-ups. |
 | `out_of_scope` | What the PR deliberately does not do. |
 | `review_discussion` | `{source, topic, outcome}` for each meaningful review thread, e.g. a Copilot finding that was fixed or a Gitar claim that was refuted. |
-| `questions` | 1–5 multiple-choice questions, `{question, options[4], answer}` with `answer` one of `A`–`D`. |
+| `questions` | 2–5 multiple-choice questions, `{question, options[4], answer}` with `answer` one of `A`–`D`. |
 
 Writing the questions:
-- **How many**: one question per distinct idea or decision in the PR. Small PRs get 1–2; a PR with several independent concerns gets up to 5.
+- **How many**: one question per distinct idea or decision in the PR, with a minimum of 2 (a single question can be guessed). Small PRs get 2; a PR with several independent concerns gets up to 5.
 - **More than 5 needed?** Don't publish a quiz. That many ideas means the PR does too much. Post a PR comment proposing how to split it (which changes go into which PR, and in what order) and stop.
 - Test the **why, the intent and the consequences** ("What would happen if…", "Why was X chosen over Y?"), not trivia such as file names, line counts or exact identifiers.
 - Every question must be answerable from the summary alone.

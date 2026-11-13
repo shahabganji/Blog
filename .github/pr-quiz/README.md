@@ -8,31 +8,32 @@ A merge gate that checks a reviewer understood **why** a PR exists and **what** 
 agent (pr-review-loop skill)                     pr-quiz.yml (runs from the default branch)
 ──────────────────────────────                   ──────────────────────────────────────────
 reviews settled, all threads resolved
-writes quiz.json (summary + ≤5 questions)
+writes quiz.json (summary + 2–5 questions)
 quiz.sh build ─ encrypts answers with public.pem
-posts the summary + quiz comment ───────────────▶ publish: validate, render HTML (artifact + job summary),
+posts the summary + quiz comment ───────────────▶ sync: render HTML (artifact + job summary),
                                                    set check "pr-quiz" = pending on the PR head
-reviewer reads the summary, comments "/quiz B C" ─▶ grade: decrypt answers (environment secret), score,
-                                                   reply with the score, set "pr-quiz" = success (≥ 90%)
-                                                   or failure (3 attempts used)
+reviewer reads the summary, comments "/quiz B C" ─▶ sync: grade every answer not graded yet, reply,
+                                                   set "pr-quiz" = success (≥ 90%) or failure (3 attempts used)
 ```
 
 - The comment contains the summary and questions in Markdown. A hidden `<!-- pr-quiz:v1 … -->` payload holds the same data plus the answer key, encrypted with RSA-OAEP. The key is bound to the PR number and head commit, so it cannot be copied to another PR.
-- The HTML summary (`pr-<n>-summary.html`) is written locally by the skill, and uploaded as an artifact of the `publish` run (linked from the `pr-quiz` check's **Details**). It includes a clickable version of the quiz that builds the `/quiz …` comment for you.
+- The HTML summary (`pr-<n>-summary.html`) is written locally by the skill, and uploaded as an artifact of each `sync` run (linked from the `pr-quiz` check's **Details**). It includes a clickable version of the quiz that builds the `/quiz …` comment for you.
 - Answer format: one letter per question, in order: `/quiz B C A`, `/quiz bca` and `/quiz 1B 2C 3A` all work. Malformed answers or the wrong count don't use an attempt.
-- Pass mark is 90% and there are 3 attempts per quiz. The constants live in `quiz.sh`; the workflow re-applies them, so a quiz comment cannot change them. With up to 5 questions, 90% means every answer must be right.
-- The reply only gives the score, not which answers were wrong. After a pass, the answer comment is minimized.
+- Pass mark is 90% and there are 3 attempts per quiz. Quizzes have 2–5 questions, because a single question can be guessed. The constants live in `quiz.sh`; the workflow re-applies them, so a quiz comment cannot change them. With up to 5 questions, 90% means every answer must be right.
+- A failed attempt is only reported as "not passed", without a score, so the score can't be used to narrow down guesses. After a pass, the answer comment is minimized.
+- `sync` is idempotent. It works from the comment history: each answer gets exactly one reply, and the check is derived from the recorded results. When answers arrive while a run is busy, the concurrency group may cancel a queued run, but the next run grades the skipped answers. Re-running a workflow never resets a pass.
 - A new push changes the head commit, which has no `pr-quiz` check yet. The PR is blocked again until a fresh quiz is published and passed.
+- If the answer key can't be decrypted (for example after `setup.sh --rotate`), the reviewer gets a reply, the check fails, and the run fails. Publish a new quiz to recover.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `quiz.sh` | Engine: validate / build (local) and publish / grade (CI). |
+| `quiz.sh` | Engine: validate / build (local) and sync (CI). |
 | `render-markdown.jq`, `render-html.jq` | Render the public spec (no answers) as the PR comment and the HTML page. All text is HTML-escaped. |
 | `public.pem` | Public key used to encrypt answer keys. Safe to commit. |
 | `setup.sh` | One-time setup (see below). |
-| `../workflows/pr-quiz.yml` | The `publish` and `grade` jobs. |
+| `../workflows/pr-quiz.yml` | Runs `quiz.sh sync` for quiz and `/quiz` comments. |
 | `../skills/pr-review-loop/` | The Copilot skill that drives a PR through review and writes the quiz. |
 
 ## Setup
