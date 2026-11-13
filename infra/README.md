@@ -68,12 +68,10 @@ resources added later would try to import an Azure id that doesn't exist.
 | `infra.yml` (infra-preview) | PR into `shahab`, or push to `shahab` (only when `infra/**` changes) | `pulumi preview`, posted as a PR comment and on the run's summary page. **Never deploys.** |
 | `infra-deploy.yml` (infra-deploy) | Push of a `release/v*` tag | `pulumi up` in the `prod` GitHub environment |
 
-The preview report (`scripts/preview_report.py`) is a single PR comment, updated on every push. It shows:
+Preview results are shown in the PR in two ways:
 
-- a coloured status box (no changes, changes, or replace/delete/failure);
-- badges with the number of resources per operation;
-- a table of the changed resources and their properties;
-- the highlighted diff, with links to Pulumi Cloud, the run and the commit.
+- the Pulumi action posts the full diff as a PR comment, updated on every run, and on the run's summary page;
+- the Pulumi GitHub App adds a resource-change summary comment and the `blog-infra/prod - Update (preview)` check. Its settings are in Pulumi Cloud under **Settings** > **Version control**.
 
 Merging into `shahab` is blocked by a repository ruleset while:
 
