@@ -1,0 +1,81 @@
+# Comprehension quiz gate for PRs into shahab: the answer form.
+#
+# 1. The pr-review-loop skill publishes a summary and quiz with pr-quiz-publish.yml. It appears on the PR's pr-quiz check.
+# 2. A requested reviewer (not the PR author, not a bot) opens this workflow in the Actions tab, clicks "Run workflow", enters
+#    the PR number and the quiz ID shown on the check, and picks one letter per question. A stale quiz ID (the quiz was
+#    replaced since the reviewer read it) is refused without using an attempt. GitHub records who started the run (github.triggering_actor), so no
+#    comment is needed. The answers are read from the event file, never from env, so they don't show up in the log.
+# 3. "quiz.sh answer" grades the attempt and sets the pr-quiz check: pending, passed (score >= 90%) or failed (every reviewer
+#    used 3 attempts). The run itself fails when the answer did not pass or was refused, with the reason in its summary.
+#
+# workflow_dispatch workflows are listed and dispatched from the default branch, and the "pr-quiz" environment (which holds the
+# private key) only accepts the shahab branch. A PR (or an AI agent working on it) cannot change how it is graded.
+name: "PR quiz: answer"
+run-name: "PR quiz: @${{ github.triggering_actor }} answers PR #${{ inputs.pr }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
+      quiz_id:
+        description: Quiz ID shown on the pr-quiz check (6 characters)
+        required: true
+        type: string
+      q1:
+        description: Q1
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+      q2:
+        description: Q2
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+      q3:
+        description: Q3 (leave at - if the quiz has fewer questions)
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+      q4:
+        description: Q4 (leave at - if the quiz has fewer questions)
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+      q5:
+        description: Q5 (leave at - if the quiz has fewer questions)
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+
+permissions: {}
+
+jobs:
+  answer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pr-quiz
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: read
+    # Shared with pr-quiz-publish.yml, so the check is never updated by two runs at once.
+    concurrency:
+      group: pr-quiz-${{ inputs.pr }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/pr-quiz
+          persist-credentials: false
+
+      - run: .github/pr-quiz/quiz.sh answer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+          ACTOR: ${{ github.triggering_actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR_QUIZ_PRIVATE_KEY: ${{ secrets.PR_QUIZ_PRIVATE_KEY }}

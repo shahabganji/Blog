@@ -1,0 +1,99 @@
+# PR comprehension quiz
+
+A merge gate that checks a reviewer understood **why** a PR exists and **what** it is meant to achieve before it is merged into `shahab`.
+
+## How it works
+
+Nothing is posted as a PR comment. The quiz lives on the PR's `pr-quiz` check, and reviewers answer with a GitHub Actions form.
+
+```
+agent (pr-review-loop skill)                        GitHub Actions (workflows run from the default branch)
+──────────────────────────────                      ───────────────────────────────────────────────────────
+reviews settled, all threads resolved
+writes quiz.json (summary + 2–5 questions)
+quiz.sh build ─ encrypts answers with public.pem
+publish-quiz.sh dispatches the payload ───────────▶ "PR quiz: publish": validate, set check "pr-quiz" = pending
+                                                    with the summary + quiz as its Markdown, attach the HTML page
+requested reviewer reads the check,
+Actions ▸ "PR quiz: answer" ▸ Run workflow
+(PR, quiz ID, Q1–Q5 dropdowns) ───────────────────▶ "PR quiz: answer": grade, record the attempt in the check,
+                                                    set "pr-quiz" = success (≥ 90%) or failure (attempts used up)
+```
+
+### For the reviewer
+
+1. On the PR, open the `pr-quiz` check (merge box → **Details**, or the **Checks** tab). Its page shows the summary and the questions. The publish run also has the page as an HTML artifact (`pr-<n>-summary.html`), which opens in the browser.
+2. Open **Actions → PR quiz: answer → Run workflow** (the check links to it). Enter the PR number and the **quiz ID** shown on the check, and pick a letter for each question. Leave the questions the quiz doesn't have at `-`.
+3. Run it. The run's summary says whether you passed, and the `pr-quiz` check on the PR updates. A run that didn't pass, or was refused, shows as failed, with the reason in its summary.
+
+Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers* list, including those who have already submitted a review (only if they are collaborators, since anyone can review a public PR). GitHub records who started the run, so nobody can answer for someone else. Runs by the PR author, bots or apps (Copilot included) are refused and don't use an attempt. The author requests a reviewer from the PR sidebar. Running a workflow needs write access, which requested reviewers have.
+
+### Details
+
+- The check's summary is the rendered quiz. Its text holds two hidden markers: the published payload (`<!-- pr-quiz:v1 … -->`: the same data plus the answer key, encrypted with RSA-OAEP and bound to the PR number and head commit) and the attempts so far (`<!-- pr-quiz-state:v1 … -->`).
+- The answers are read from the run's event file, not passed through `env`, so they never appear in the log or the run summary.
+- Pass mark is 90% and each reviewer gets 3 attempts per quiz. One reviewer passing is enough. The check only fails when every requested reviewer has used up their attempts.
+- Quizzes have 2–5 questions, because a single question can be guessed. The form has 5 fixed slots (Q1–Q5), because workflow inputs can't change per PR. Answering the wrong number of questions doesn't use an attempt. The constants live in `quiz.sh` and are re-applied on every run, so a payload cannot change them. With up to 5 questions, 90% means every answer must be right.
+- A failed attempt is only reported as "not passed", without a score, so the score can't be used to narrow down guesses.
+- Publishing checks that the payload is valid, belongs to the PR's current head commit and decrypts with the private key. A bad payload is refused and the check is left as it was.
+- Every build of a quiz has a 6-character quiz ID, derived from its encrypted answer key. The reviewer enters it in the form; an answer with another ID (the quiz was replaced after the reviewer read it, or while the run was queued) is refused without using an attempt, so it is never graded against a quiz the reviewer didn't see.
+- Publishing again replaces the quiz and resets the attempts, even after a pass: the latest quiz decides. A completed check can't go back to pending, so a new check run is created; the newest run is the one that counts.
+- A new push changes the head commit, which has no `pr-quiz` check yet. The PR is blocked again until a fresh quiz is published and passed. Answers for the old commit are refused.
+- If the answer key can't be decrypted when grading (for example after `setup.sh --rotate`), the check fails. Publish a new quiz to recover.
+- The `pr-quiz` check belongs to the head commit, not the PR. If another open PR has the same head commit, publishing and answering are refused until that PR is closed.
+- Both workflows share a concurrency group per PR, so the check is never updated by two runs at once. If several reviewers submit at the same moment, GitHub may cancel a queued run. A cancelled run doesn't use an attempt; run it again.
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `quiz.sh` | Engine: validate / build (local), publish / answer (CI). |
+| `render-markdown.jq`, `render-html.jq` | Render the public spec (no answers) as the check's Markdown and the HTML page. All text is HTML-escaped. |
+| `public.pem` | Public key used to encrypt answer keys. Safe to commit. |
+| `setup.sh` | One-time setup (see below). |
+| `../workflows/pr-quiz-publish.yml` | "PR quiz: publish": runs `quiz.sh publish` for the skill. |
+| `../workflows/pr-quiz.yml` | "PR quiz: answer": the reviewers' answer form, runs `quiz.sh answer`. |
+| `../skills/pr-review-loop/` | The Copilot skill that drives a PR through review and writes the quiz. |
+
+## Setup
+
+```bash
+.github/pr-quiz/setup.sh              # pr-quiz environment (deploy branch only) + keypair + PR_QUIZ_PRIVATE_KEY secret
+.github/pr-quiz/setup.sh --activate   # also: default branch -> shahab, ruleset "shahab: PR quiz" requiring the pr-quiz check
+.github/pr-quiz/setup.sh --rotate     # new keypair; commit the new public.pem (quizzes already posted can no longer be graded)
+```
+
+The private key is generated in a temp directory, uploaded straight to the environment secret and then deleted. It never touches the repository.
+
+### Why `--activate` changes the default branch
+
+The publish and answer forms are `workflow_dispatch` workflows, and GitHub only lists and dispatches those when they exist on the **default branch**. With `master` as default (it only mirrors upstream), the quiz could never be published or answered. Making `shahab` the default branch also means:
+
+- New PRs target `shahab` by default.
+- Scheduled workflows (for example CodeQL in `codeql.yml`) run against `shahab`.
+- Upstream syncing of `master` is unaffected.
+
+The forms run from `shahab`, and the `pr-quiz` environment, which holds the private key, only accepts `shahab`. A run on any other branch can't read the key, so a PR (or an AI agent working on one) cannot change how it is graded.
+
+Activate only after this workflow is merged into `shahab`. Otherwise the required `pr-quiz` check can't be reported and every PR is blocked.
+
+## Trust model and limits
+
+This is a **comprehension gate, not a security control**.
+
+- The public key is public, so anyone who can run the publish workflow (write access) can publish a quiz with answers they know.
+- Only requested reviewers who are users (not bots) and not the PR author can answer. GitHub can't tell whether a *person's* token is being used by an agent. If a reviewer lets an agent run workflows as them, the agent could answer. Agents that work with the author's token are excluded as the author.
+- In a single-maintainer repository, the maintainer can't pass the quiz on their own PRs, because GitHub doesn't allow requesting a review from the PR author. Either request a review from another collaborator, or merge with the admin bypass. PRs opened by the Copilot coding agent are authored by a bot, so the maintainer can be their reviewer.
+- Any workflow in this repository that has `checks: write` could create a check named `pr-quiz` (they all share the GitHub Actions app id that the ruleset matches).
+- The answers a reviewer picks are not shown in the run's log or summary. Each new quiz has new questions.
+- Repository admins can bypass the ruleset.
+
+## Local testing
+
+```bash
+export QUIZ_PUBLIC_KEY=/tmp/test-pub.pem   # throwaway keypair, generated with openssl
+.github/pr-quiz/quiz.sh validate .github/skills/pr-review-loop/quiz-spec.example.json
+.github/pr-quiz/quiz.sh build .github/skills/pr-review-loop/quiz-spec.example.json 1 "$(git rev-parse HEAD)" https://github.com/o/r/pull/1 /tmp
+# -> prints the payload; writes /tmp/pr-1-quiz.md (check summary) and /tmp/pr-1-summary.html
+.github/pr-quiz/quiz.sh check-answers payload.json BC /tmp/test-key.pem
+```
