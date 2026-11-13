@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using LinkDotNet.Blog.Web.Features.Admin.Dashboard.Components;
 
 namespace LinkDotNet.Blog.UnitTests.Web.Features.Admin.Dashboard.Components;

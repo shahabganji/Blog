@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using LinkDotNet.Blog.TestUtilities;
 using LinkDotNet.Blog.Web.Features.AboutMe.Components.Skill;
 

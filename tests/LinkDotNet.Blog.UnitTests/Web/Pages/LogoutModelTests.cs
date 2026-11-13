@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using LinkDotNet.Blog.Web.Authentication;
 using LinkDotNet.Blog.Web.Pages;
 

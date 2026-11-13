@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -29,7 +29,7 @@ public sealed class SmokeTests : IClassFixture<WebApplicationFactory<Program>>, 
             builder.UseSetting("PersistenceProvider", PersistenceProvider.Sqlite.Key);
             builder.UseSetting("ConnectionString", "DataSource=file::memory:?cache=shared");
         });
-        
+
         scope = this.factory.Services.CreateScope();
         client = this.factory.CreateClient();
     }
@@ -62,13 +62,13 @@ public sealed class SmokeTests : IClassFixture<WebApplicationFactory<Program>>, 
     public async Task RssFeedShouldBeRateLimited()
     {
         const int numberOfRequests = 16;
-        
+
         for (var i = 0; i < numberOfRequests - 1; i++)
         {
             var result = await client.GetAsync("/feed.rss", cancellationToken: TestContext.Current.CancellationToken);
             result.IsSuccessStatusCode.ShouldBeTrue();
         }
-        
+
         var lastResult = await client.GetAsync("/feed.rss", cancellationToken: TestContext.Current.CancellationToken);
         lastResult.IsSuccessStatusCode.ShouldBeFalse();
     }

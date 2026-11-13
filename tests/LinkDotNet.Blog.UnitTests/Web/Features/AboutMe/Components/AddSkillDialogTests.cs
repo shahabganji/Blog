@@ -1,4 +1,4 @@
-﻿using Blazored.Toast.Services;
+using Blazored.Toast.Services;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.Web.Features.AboutMe.Components.Skill;
 using Microsoft.Extensions.DependencyInjection;

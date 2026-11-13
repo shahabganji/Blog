@@ -32,7 +32,7 @@ public class SimilarBlogPostSectionTests : SqlDatabaseTestBase<BlogPost>
         context.Services.AddScoped<IRepository<SimilarBlogPost>>(_ =>
             new Repository<SimilarBlogPost>(DbContextFactory, Substitute.For<ILogger<Repository<SimilarBlogPost>>>()));
         context.Services.AddScoped(_ => Repository);
-        
+
         var cut = context.Render<SimilarBlogPostSection>(p => p.Add(s => s.BlogPost, blogPost1));
 
         var elements = cut.WaitForElements("h6");

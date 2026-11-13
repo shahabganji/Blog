@@ -24,14 +24,14 @@ public class TransformBlogPostRecordsJobTests : SqlDatabaseTestBase<BlogPost>
             new Repository<BlogPostRecord>(DbContextFactory, Substitute.For<ILogger<Repository<BlogPostRecord>>>());
         userRecordRepository =
             new Repository<UserRecord>(DbContextFactory, Substitute.For<ILogger<Repository<UserRecord>>>());
-        
+
         sut = new TransformBlogPostRecordsJob(
             Repository,
             userRecordRepository,
             blogPostRecordRepository,
             Substitute.For<ILogger<TransformBlogPostRecordsJob>>());
     }
-    
+
     [Fact]
     public async Task ShouldTransformRecords()
     {
@@ -65,7 +65,7 @@ public class TransformBlogPostRecordsJobTests : SqlDatabaseTestBase<BlogPost>
 
         var transformedBlogPostRecords = await blogPostRecordRepository.GetAllAsync();
         transformedBlogPostRecords.Count.ShouldBe(3);
-        
+
         var post1Record = transformedBlogPostRecords.FirstOrDefault(r => r.BlogPostId == blogPosts[0].Id);
         post1Record.ShouldNotBeNull();
         post1Record.Clicks.ShouldBe(2);
@@ -101,7 +101,7 @@ public class TransformBlogPostRecordsJobTests : SqlDatabaseTestBase<BlogPost>
             new() { BlogPostId = blogPost.Id, DateClicked = someDate, Clicks = 1 },
         ];
         await blogPostRecordRepository.StoreBulkAsync(blogPostRecords);
-        
+
         // Act
         await sut.RunAsync(Substitute.For<IJobExecutionContext>(), TestContext.Current.CancellationToken);
 

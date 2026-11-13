@@ -95,7 +95,8 @@ public class Program
             {
                 slideDeck.UseStaticFiles(new StaticFileOptions
                 {
-                    ServeUnknownFileTypes = true, DefaultContentType = "text/html; charset=utf-8",
+                    ServeUnknownFileTypes = true,
+                    DefaultContentType = "text/html; charset=utf-8",
                 });
             });
         app.MapStaticAssets();

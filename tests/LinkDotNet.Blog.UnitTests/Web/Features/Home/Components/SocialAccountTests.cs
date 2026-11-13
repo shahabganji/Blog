@@ -23,7 +23,7 @@ public class SocialAccountTests : BunitContext
                 $"Social icon #{iconId} visibility should be {shouldBeVisible}");
         }
     }
-    
+
     private record SocialTestCase(
         string Name,
         string? Url,

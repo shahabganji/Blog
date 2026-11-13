@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using LinkDotNet.Blog.Web.Features.ShowBlogPost.Components;
 
 namespace LinkDotNet.Blog.UnitTests.Web.Features.ShowBlogPost.Components;

@@ -1,4 +1,4 @@
-﻿namespace LinkDotNet.Blog.Web.Features.Admin.Dashboard.Components;
+namespace LinkDotNet.Blog.Web.Features.Admin.Dashboard.Components;
 
 public readonly record struct VisitCountPageData
 {

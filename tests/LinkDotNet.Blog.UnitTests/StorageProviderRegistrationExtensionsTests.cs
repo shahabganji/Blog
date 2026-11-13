@@ -6,7 +6,7 @@ namespace LinkDotNet.Blog.UnitTests;
 
 public class StorageProviderRegistrationExtensionsTests
 {
-    public static TheoryData<Action<IServiceCollection>> Data => new() 
+    public static TheoryData<Action<IServiceCollection>> Data => new()
     {
         services => services.UseSqliteAsStorageProvider(),
         services => services.UseSqlAsStorageProvider(),

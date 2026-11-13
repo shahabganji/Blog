@@ -89,7 +89,7 @@ public class RssFeedControllerTests : SqlDatabaseTestBase<BlogPost>
             </rss>
             """);
     }
-    
+
     [Fact]
     public async Task ShouldReturnFullContentIfRequested()
     {
@@ -167,7 +167,7 @@ public class RssFeedControllerTests : SqlDatabaseTestBase<BlogPost>
              </rss>
              """);
     }
-    
+
     [Fact]
     public async Task ShouldReturnNPostsIfRequested()
     {
@@ -234,7 +234,7 @@ public class RssFeedControllerTests : SqlDatabaseTestBase<BlogPost>
             </rss>
             """);
     }
-    
+
     [Fact]
     public async Task ShouldRespectBlogPostsPerPage()
     {

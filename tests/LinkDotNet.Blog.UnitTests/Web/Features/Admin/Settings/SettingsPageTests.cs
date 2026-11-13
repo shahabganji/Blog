@@ -23,7 +23,7 @@ public class SettingsPageTests : BunitContext
         Services.AddScoped(_ => Substitute.For<IInstantJobRegistry>());
         var cut = Render<SettingsPage>();
         var invalidateCacheButton = cut.Find("#invalidate-cache");
-        
+
         invalidateCacheButton.Click();
 
         cacheInvalidator.Received(1).ClearCacheAsync();

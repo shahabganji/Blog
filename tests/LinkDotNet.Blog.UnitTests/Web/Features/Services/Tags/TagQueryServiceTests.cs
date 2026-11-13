@@ -17,6 +17,7 @@ using ZiggyCreatures.Caching.Fusion;
 
 
 namespace LinkDotNet.Blog.UnitTests.Web.Features.Services.Tags;
+
 public sealed class TagQueryServiceTests
 {
 
@@ -91,12 +92,12 @@ public sealed class TagQueryServiceTests
         var tagLists = new List<List<string>>
         {
             new() { "CSharp", " " },
-            new() 
+            new()
         };
 
         repository.GetAllByProjectionAsync(p => p.Tags)
             .ReturnsForAnyArgs(new PagedList<List<string>>(
-                tagLists, tagLists.Count, 1, tagLists.Count ));
+                tagLists, tagLists.Count, 1, tagLists.Count));
 
         // Act
         var result = await tagQueryService.GetAllOrderedByUsageAsync();

@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using Blazored.Toast.Services;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.TestUtilities;
@@ -21,17 +21,17 @@ public class AboutMePageTests : BunitContext
     {
         ComponentFactories.Add<MarkdownTextArea, MarkdownFake>();
     }
-    
+
     [Fact]
     public void ShouldPassIsAuthenticated()
     {
         AddAuthorization().SetAuthorized("test");
         var config = new ProfileInformationBuilder().Build();
-        
+
         var applicationConfiguration = new ApplicationConfigurationBuilder()
             .WithIsAboutMeEnabled(true)
             .Build();
-        
+
         SetupMocks(config, applicationConfiguration);
 
         var cut = Render<AboutMePage>();
@@ -46,11 +46,11 @@ public class AboutMePageTests : BunitContext
     {
         AddAuthorization().SetNotAuthorized();
         var config = new ProfileInformationBuilder().Build();
-        
+
         var applicationConfiguration = new ApplicationConfigurationBuilder()
             .WithIsAboutMeEnabled(false)
             .Build();
-        
+
         SetupMocks(config, applicationConfiguration);
 
         var cut = Render<AboutMePage>();
