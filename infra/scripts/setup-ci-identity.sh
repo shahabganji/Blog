@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 # Setup of the identities GitHub Actions uses to run Pulumi against the blog resource group. Safe to re-run.
-#   - Deploy identity (APP_NAME): Contributor on the "blog" resource group. Its OIDC federated credential
-#     trusts ONLY jobs in the protected "prod" environment, and its client id is a "prod" environment variable.
-#   - Preview identity (PREVIEW_APP_NAME): Reader on the "blog" resource group, trusted for pull requests and
+# Both are user-assigned managed identities with GitHub OIDC federated credentials (no secrets, no app registrations),
+# kept in their own resource group (IDENTITY_RG) on which CI has no rights, so CI can never add credentials to them.
+#   - Deploy identity (DEPLOY_IDENTITY): Contributor on the "blog" resource group. Its federated credential trusts
+#     ONLY jobs in the protected "prod" environment, and its client id is a "prod" environment variable.
+#   - Preview identity (PREVIEW_IDENTITY): Reader on the "blog" resource group, trusted for pull requests and
 #     pushes to the deploy branch. PR code runs in the preview job, so that job must not be able to write to Azure.
 # It also configures the GitHub repo:
 #   - "prod" environment: REVIEWER must approve every deployment; only release/v* tags may deploy.
 #   - ruleset on the deploy branch: no merge while the Copilot review runs or conversations are unresolved.
 #   - AZURE_* variables and (when PULUMI_ACCESS_TOKEN is set) the PULUMI_ACCESS_TOKEN secret.
 #
-# Prerequisites: az (logged in to the target subscription), gh (authenticated). Optionally a Pulumi access
-# token in PULUMI_ACCESS_TOKEN (https://app.pulumi.com/account/tokens) to (re)set the repo secret.
+# Prerequisites: az (logged in to the target subscription, Owner or User Access Administrator), gh (authenticated).
+# Optionally a Pulumi access token in PULUMI_ACCESS_TOKEN (https://app.pulumi.com/account/tokens) to (re)set the repo secret.
 set -euo pipefail
 
 REPO="${REPO:-shahabganji/Blog}"
 RESOURCE_GROUP="${RESOURCE_GROUP:-blog}"
-APP_NAME="${APP_NAME:-github-blog-infra}"
-PREVIEW_APP_NAME="${PREVIEW_APP_NAME:-github-blog-infra-preview}"
+IDENTITY_RG="${IDENTITY_RG:-github-ci}"
+LOCATION="${LOCATION:-westeurope}"
+DEPLOY_IDENTITY="${DEPLOY_IDENTITY:-id-github-blog-infra}"
+PREVIEW_IDENTITY="${PREVIEW_IDENTITY:-id-github-blog-infra-preview}"
 GH_ENVIRONMENT="${GH_ENVIRONMENT:-prod}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-shahab}"
 RELEASE_TAG_PATTERN="${RELEASE_TAG_PATTERN:-release/v*}"
@@ -25,56 +29,41 @@ REVIEWER="${REVIEWER:-$(gh api user -q .login)}"
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 TENANT_ID="$(az account show --query tenantId -o tsv)"
 RG_ID="$(az group show -n "$RESOURCE_GROUP" --query id -o tsv)"
+az group create -n "$IDENTITY_RG" -l "$LOCATION" --tags Purpose=github-ci Owner=Shahab >/dev/null
 
-ensure_app() {
-  local name="$1" app_id
-  app_id="$(az ad app list --display-name "$name" --query '[0].appId' -o tsv)"
-  if [[ -z "$app_id" ]]; then
-    app_id="$(az ad app create --display-name "$name" --query appId -o tsv)"
-  fi
-  az ad sp show --id "$app_id" >/dev/null 2>&1 || az ad sp create --id "$app_id" >/dev/null
-  echo "$app_id"
+ensure_identity() {
+  az identity show -g "$IDENTITY_RG" -n "$1" >/dev/null 2>&1 || az identity create -g "$IDENTITY_RG" -n "$1" -l "$LOCATION" >/dev/null
 }
 
 add_federated_credential() {
-  local app_id="$1" name="$2" subject="$3"
-  if ! az ad app federated-credential list --id "$app_id" --query "[?name=='$name']" -o tsv | grep -q .; then
-    az ad app federated-credential create --id "$app_id" --parameters "{
-      \"name\": \"$name\",
-      \"issuer\": \"https://token.actions.githubusercontent.com\",
-      \"subject\": \"$subject\",
-      \"audiences\": [\"api://AzureADTokenExchange\"]
-    }" >/dev/null
-  fi
-}
-
-remove_federated_credential() {
-  local app_id="$1" name="$2"
-  if az ad app federated-credential list --id "$app_id" --query "[?name=='$name']" -o tsv | grep -q .; then
-    az ad app federated-credential delete --id "$app_id" --federated-credential-id "$name" >/dev/null
+  local identity="$1" name="$2" subject="$3"
+  if ! az identity federated-credential show -g "$IDENTITY_RG" --identity-name "$identity" -n "$name" >/dev/null 2>&1; then
+    az identity federated-credential create -g "$IDENTITY_RG" --identity-name "$identity" -n "$name" \
+      --issuer "https://token.actions.githubusercontent.com" --subject "$subject" \
+      --audiences "api://AzureADTokenExchange" >/dev/null
   fi
 }
 
 assign_role() {
-  local app_id="$1" role="$2" object_id
-  object_id="$(az ad sp show --id "$app_id" --query id -o tsv)"
-  az role assignment create --assignee-object-id "$object_id" --assignee-principal-type ServicePrincipal \
+  local identity="$1" role="$2" principal_id
+  principal_id="$(az identity show -g "$IDENTITY_RG" -n "$identity" --query principalId -o tsv)"
+  az role assignment create --assignee-object-id "$principal_id" --assignee-principal-type ServicePrincipal \
     --role "$role" --scope "$RG_ID" >/dev/null
 }
 
 # Deploy identity. Contributor deliberately lacks Microsoft.Authorization/locks/* : the CanNotDelete lock on the
 # resource group is manual-only and must never be modifiable by CI (it is not part of the Pulumi program either).
-APP_ID="$(ensure_app "$APP_NAME")"
-add_federated_credential "$APP_ID" "github-env-${GH_ENVIRONMENT}" "repo:${REPO}:environment:${GH_ENVIRONMENT}"
-remove_federated_credential "$APP_ID" "github-pull-request"
-remove_federated_credential "$APP_ID" "github-branch-${DEPLOY_BRANCH}"
-assign_role "$APP_ID" Contributor
+ensure_identity "$DEPLOY_IDENTITY"
+add_federated_credential "$DEPLOY_IDENTITY" "github-env-${GH_ENVIRONMENT}" "repo:${REPO}:environment:${GH_ENVIRONMENT}"
+assign_role "$DEPLOY_IDENTITY" Contributor
+DEPLOY_CLIENT_ID="$(az identity show -g "$IDENTITY_RG" -n "$DEPLOY_IDENTITY" --query clientId -o tsv)"
 
 # Preview identity (read-only).
-PREVIEW_APP_ID="$(ensure_app "$PREVIEW_APP_NAME")"
-add_federated_credential "$PREVIEW_APP_ID" "github-pull-request" "repo:${REPO}:pull_request"
-add_federated_credential "$PREVIEW_APP_ID" "github-branch-${DEPLOY_BRANCH}" "repo:${REPO}:ref:refs/heads/${DEPLOY_BRANCH}"
-assign_role "$PREVIEW_APP_ID" Reader
+ensure_identity "$PREVIEW_IDENTITY"
+add_federated_credential "$PREVIEW_IDENTITY" "github-pull-request" "repo:${REPO}:pull_request"
+add_federated_credential "$PREVIEW_IDENTITY" "github-branch-${DEPLOY_BRANCH}" "repo:${REPO}:ref:refs/heads/${DEPLOY_BRANCH}"
+assign_role "$PREVIEW_IDENTITY" Reader
+PREVIEW_CLIENT_ID="$(az identity show -g "$IDENTITY_RG" -n "$PREVIEW_IDENTITY" --query clientId -o tsv)"
 
 # prevent_self_review must stay false: the reviewer is also the one pushing the release tags.
 REVIEWER_ID="$(gh api "users/${REVIEWER}" -q .id)"
@@ -92,9 +81,9 @@ if ! gh api "repos/${REPO}/environments/${GH_ENVIRONMENT}/deployment-branch-poli
 fi
 
 # The deploy client id lives only in the "prod" environment; jobs outside it get the read-only preview identity.
-gh variable set AZURE_CLIENT_ID --repo "$REPO" --env "$GH_ENVIRONMENT" --body "$APP_ID"
+gh variable set AZURE_CLIENT_ID --repo "$REPO" --env "$GH_ENVIRONMENT" --body "$DEPLOY_CLIENT_ID"
 gh variable delete AZURE_CLIENT_ID --repo "$REPO" >/dev/null 2>&1 || true
-gh variable set AZURE_PREVIEW_CLIENT_ID --repo "$REPO" --body "$PREVIEW_APP_ID"
+gh variable set AZURE_PREVIEW_CLIENT_ID --repo "$REPO" --body "$PREVIEW_CLIENT_ID"
 gh variable set AZURE_TENANT_ID --repo "$REPO" --body "$TENANT_ID"
 gh variable set AZURE_SUBSCRIPTION_ID --repo "$REPO" --body "$SUBSCRIPTION_ID"
 if [[ -n "${PULUMI_ACCESS_TOKEN:-}" ]]; then
@@ -137,4 +126,4 @@ else
   gh api --method POST "repos/${REPO}/rulesets" --input - >/dev/null <<<"$RULESET_JSON"
 fi
 
-echo "Done. Deploy app (client) id: $APP_ID, preview app (client) id: $PREVIEW_APP_ID"
+echo "Done. Deploy client id: $DEPLOY_CLIENT_ID, preview client id: $PREVIEW_CLIENT_ID"

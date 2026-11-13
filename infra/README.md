@@ -92,7 +92,7 @@ Upstream uses plain `v*` tags, which is why the release tags have their own pref
 git tag release/v1.0.0 && git push origin release/v1.0.0   # then approve the run in GitHub Actions
 ```
 
-Azure authentication uses GitHub OIDC, so no client secret is stored. The setup is idempotent and can be re-run at any time:
+Azure authentication uses GitHub OIDC with managed identities, so no client secret exists. The setup is idempotent and can be re-run at any time:
 
 ```bash
 infra/scripts/setup-ci-identity.sh                                  # identity, environment protection, branch ruleset, repo variables
@@ -101,15 +101,16 @@ PULUMI_ACCESS_TOKEN=<token> infra/scripts/setup-ci-identity.sh      # ...and als
 
 The script does the following:
 
-- Creates two Entra apps:
+- Creates two **user-assigned managed identities** in their own resource group, `github-ci`. Each has GitHub OIDC federated credentials, so no secrets or app registrations are involved:
 
-  | App | Role on RG `blog` | Trusted for (OIDC subject) | Client id |
+  | Identity | Role on RG `blog` | Trusted for (OIDC subject) | Client id |
   |---|---|---|---|
-  | `github-blog-infra` (deploy) | **Contributor** | the `prod` environment **only** | `prod` environment variable `AZURE_CLIENT_ID` |
-  | `github-blog-infra-preview` | **Reader** | PRs and pushes to `shahab` | repo variable `AZURE_PREVIEW_CLIENT_ID` |
+  | `id-github-blog-infra` (deploy) | **Contributor** | the `prod` environment **only** | `prod` environment variable `AZURE_CLIENT_ID` |
+  | `id-github-blog-infra-preview` | **Reader** | PRs and pushes to `shahab` | repo variable `AZURE_PREVIEW_CLIENT_ID` |
 
   Code from a PR runs in the preview job, so that job only gets read access. Write access requires the approved,
-  tag-only `prod` environment. Neither app can modify or remove the delete lock (that needs `Microsoft.Authorization/locks/*`).
+  tag-only `prod` environment. CI has no rights on `github-ci`, so it can't add trust to the identities.
+  Neither identity can modify or remove the delete lock (that needs `Microsoft.Authorization/locks/*`).
 - Configures the `prod` environment and the `shahab` ruleset as described above.
 - Sets the `AZURE_*` variables.
 
