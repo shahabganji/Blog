@@ -8,7 +8,6 @@ config:
       secure: AAABALEme4ax1UaHZjMWAhz8GYQc+nQ3bhf1kfAiB/nRnbtHom7VxieOzWkC
   blog-infra:sqlAdminPassword:
     secure: AAABACg2NluWcd3gMimPvMhlDll8spJ/DjQWCqN14CEIuGQcPwKZA2q16n++AzZl
-  blog-infra:importExisting: "true"
   blog-infra:storageAllowedIps:
     - secure: AAABAB0wwtubcRA4R6iaPR4hP5T2OekI/h9Pvrs2EYeG+jIj/vfQWWLWakH2iA==
   blog-infra:appInsightsWorkspaceResourceId: /subscriptions/5d390e2c-41b3-489d-81aa-f4f09fb29fe8/resourceGroups/DefaultResourceGroup-WEU/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-5d390e2c-41b3-489d-81aa-f4f09fb29fe8-WEU

@@ -47,11 +47,36 @@ jobs:
         with:
           dotnet-quality: preview
           dotnet-version: 11.0.x
+      # Installs the Pulumi CLI only; the preview runs below so its event log can feed the report.
       - uses: pulumi/actions@v7
-        with:
-          command: preview
-          stack-name: shahabganji/blog-infra/prod
-          work-dir: infra
-          diff: true
-          comment-on-pr: ${{ github.event_name == 'pull_request' }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: pulumi preview
+        id: preview
+        working-directory: infra
+        env:
+          # Exposes --event-log (the structured engine events also used by Pulumi's Automation API).
+          PULUMI_DEBUG_COMMANDS: "true"
+        run: |
+          set -o pipefail
+          pulumi preview --stack shahabganji/blog-infra/prod --diff --color never \
+            --suppress-progress --non-interactive \
+            --event-log "$RUNNER_TEMP/events.jsonl" 2>&1 | tee "$RUNNER_TEMP/preview.txt"
+      - name: Publish preview report
+        if: always() && steps.preview.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STACK: prod
+          OUTCOME: ${{ steps.preview.outcome }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 infra/scripts/preview_report.py "$RUNNER_TEMP/events.jsonl" "$RUNNER_TEMP/preview.txt" "$OUTCOME" > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$PR_NUMBER" ] || exit 0
+          # One comment per PR, updated in place on every run.
+          comment_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            -q '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- pulumi-preview-report -->"))) | .id' | head -n1)
+          if [ -n "$comment_id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -F body=@"$RUNNER_TEMP/report.md" > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/report.md" > /dev/null
+          fi

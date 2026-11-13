@@ -3,6 +3,7 @@
 # Creates (or reuses) an Entra app + service principal with GitHub OIDC federated credentials,
 # grants it Contributor on the "blog" resource group only, and configures the GitHub repo:
 #   - "prod" environment: REVIEWER must approve every deployment; only release/v* tags may deploy.
+#   - ruleset on the deploy branch: no merge while the Copilot review runs or conversations are unresolved.
 #   - AZURE_* variables and (when PULUMI_ACCESS_TOKEN is set) the PULUMI_ACCESS_TOKEN secret.
 # Safe to re-run.
 #
@@ -69,6 +70,42 @@ gh variable set AZURE_TENANT_ID --repo "$REPO" --body "$TENANT_ID"
 gh variable set AZURE_SUBSCRIPTION_ID --repo "$REPO" --body "$SUBSCRIPTION_ID"
 if [[ -n "${PULUMI_ACCESS_TOKEN:-}" ]]; then
   gh secret set PULUMI_ACCESS_TOKEN --repo "$REPO" --body "$PULUMI_ACCESS_TOKEN"
+fi
+
+# PRs into the deploy branch cannot be merged while the Copilot review is still running (its check is required)
+# or while any review conversation is unresolved. Copilot reviews every push automatically.
+# Repo admins may bypass (direct pushes such as upstream syncs); on PRs that needs an explicit "bypass rules" tick.
+RULESET_NAME="${DEPLOY_BRANCH}: review before merge"
+GITHUB_ACTIONS_APP_ID=15368
+RULESET_JSON="$(cat <<JSON
+{
+  "name": "${RULESET_NAME}",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/${DEPLOY_BRANCH}"], "exclude": [] } },
+  "bypass_actors": [ { "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" } ],
+  "rules": [
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": true,
+        "allowed_merge_methods": ["merge", "squash", "rebase"] } },
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [ { "context": "copilot-pull-request-reviewer", "integration_id": ${GITHUB_ACTIONS_APP_ID} } ] } },
+    { "type": "copilot_code_review", "parameters": { "review_on_push": true, "review_draft_pull_requests": false } }
+  ]
+}
+JSON
+)"
+RULESET_ID="$(gh api "repos/${REPO}/rulesets" -q ".[] | select(.name == \"${RULESET_NAME}\") | .id")"
+if [[ -n "$RULESET_ID" ]]; then
+  gh api --method PUT "repos/${REPO}/rulesets/${RULESET_ID}" --input - >/dev/null <<<"$RULESET_JSON"
+else
+  gh api --method POST "repos/${REPO}/rulesets" --input - >/dev/null <<<"$RULESET_JSON"
 fi
 
 echo "Done. App (client) id: $APP_ID"

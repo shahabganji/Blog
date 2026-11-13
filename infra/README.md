@@ -51,10 +51,12 @@ when `importExisting=true`:
 ```bash
 pulumi preview --diff --config importExisting=true   # must show only "import" steps, no update/replace
 pulumi up --config importExisting=true
+pulumi config rm importExisting                      # `--config` is saved to Pulumi.<stack>.yaml; never commit it as true
 pulumi preview --expect-no-changes                   # afterwards: everything unchanged
 ```
 
-To rebuild the state (for example a new stack or backend), run the same commands again.
+To rebuild the state (for example a new stack or backend), run the same commands again. Remove `importExisting` afterwards, otherwise
+resources added later would try to import an Azure id that doesn't exist.
 `ignoreChanges` is used only for values Azure computes or that don't apply to this Linux site. Ignoring them also keeps their current values on future updates.
 
 ## CI/CD
@@ -63,8 +65,22 @@ To rebuild the state (for example a new stack or backend), run the same commands
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `infra.yml` (infra-preview) | PR into `shahab`, or push to `shahab` (only when `infra/**` changes) | `pulumi preview` (posted as a PR comment). **Never deploys.** |
+| `infra.yml` (infra-preview) | PR into `shahab`, or push to `shahab` (only when `infra/**` changes) | `pulumi preview`, posted as a PR comment and on the run's summary page. **Never deploys.** |
 | `infra-deploy.yml` (infra-deploy) | Push of a `release/v*` tag | `pulumi up` in the `prod` GitHub environment |
+
+The preview report (`scripts/preview_report.py`) is a single PR comment, updated on every push. It shows:
+
+- a coloured status box (no changes, changes, or replace/delete/failure);
+- badges with the number of resources per operation;
+- a table of the changed resources and their properties;
+- the highlighted diff, with links to Pulumi Cloud, the run and the commit.
+
+Merging into `shahab` is blocked by a repository ruleset while:
+
+- the Copilot review is still running (its `copilot-pull-request-reviewer` check is required); or
+- any review conversation is unresolved.
+
+Copilot reviews every push automatically. Repo admins can still push directly, for example for upstream syncs. On a PR, an admin has to tick "bypass rules" explicitly to merge early.
 
 Production deploys are guarded three ways:
 
@@ -81,7 +97,7 @@ git tag release/v1.0.0 && git push origin release/v1.0.0   # then approve the ru
 Azure authentication uses GitHub OIDC, so no client secret is stored. The setup is idempotent and can be re-run at any time:
 
 ```bash
-infra/scripts/setup-ci-identity.sh                                  # identity, environment protection, repo variables
+infra/scripts/setup-ci-identity.sh                                  # identity, environment protection, branch ruleset, repo variables
 PULUMI_ACCESS_TOKEN=<token> infra/scripts/setup-ci-identity.sh      # ...and also (re)set the Pulumi token secret
 ```
 
@@ -89,7 +105,7 @@ The script does the following:
 
 - Creates the Entra app `github-blog-infra`, with federated credentials for PRs, the `shahab` branch and the `prod` environment.
 - Grants it **Contributor on RG `blog` only**, which cannot modify or remove the delete lock (that requires `Microsoft.Authorization/locks/*`).
-- Configures the `prod` environment as described above.
+- Configures the `prod` environment and the `shahab` ruleset as described above.
 - Sets the `AZURE_*` repo variables.
 
 ## Known follow-ups (intentionally not changed)
