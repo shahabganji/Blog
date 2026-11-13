@@ -47,4 +47,7 @@ jobs:
           command: up
           stack-name: shahabganji/blog-infra/prod
           work-dir: infra
+          # Read the current Azure values first: properties in ignoreChanges (manually maintained IP rules,
+          # Azure-renewed certificate thumbprints) are re-sent from state on update and must not be stale.
+          refresh: true
           diff: true
