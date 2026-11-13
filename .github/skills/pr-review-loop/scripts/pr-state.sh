@@ -46,7 +46,7 @@ snapshot() {
     | jq -s 'add // []')"
   comments="$(gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" --jq '.[]' \
     | jq -s '[.[] | select(.user.type == "Bot" and (.body | contains("<!-- pr-quiz") | not))] | group_by(.user.login)
-             | map(last | {author: .user.login, url: .html_url, updated_at, body: .body[0:6000]})')"
+             | map(last | {author: .user.login, url: .html_url, updated_at, body})')"
   jq -n --argjson pr "$pr" --argjson checks "$checks" --argjson statuses "$statuses" --argjson threads "$threads" \
     --argjson bot_comments "$comments" --arg copilot "$COPILOT_RUN" --arg gitar "$GITAR_RUN" --arg required "$REQUIRED_BOTS" '
     ($checks + $statuses) as $all
