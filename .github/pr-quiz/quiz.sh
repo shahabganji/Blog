@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # PR comprehension quiz engine, shared by the pr-review-loop skill (build) and .github/workflows/pr-quiz.yml (sync).
 #
-#   quiz.sh validate <quiz.json>                                     check a private quiz spec (with answers)
-#   quiz.sh build <quiz.json> <pr> <head-sha> <pr-url> [html-out]    print the PR comment body; optionally write the HTML page
-#   quiz.sh check-answers <payload.json> <answers> <private-key>     grade answers against the encrypted key (prints JSON)
-#   quiz.sh parse-answers <comment-body>                             normalise "/quiz B C A" -> "BCA" (exit 1 if malformed)
-#   quiz.sh sync                                                     CI: grade new "/quiz ..." answers and update the pr-quiz check
+#   quiz.sh validate <quiz.json>                                   check a private quiz spec (with answers)
+#   quiz.sh build <quiz.json> <pr> <head-sha> <pr-url> <out-dir>   print the encrypted payload; write the check summary preview
+#                                                                  (pr-<n>-quiz.md) and the HTML page (pr-<n>-summary.html)
+#   quiz.sh check-answers <payload.json> <answers> <private-key>   grade answers against the encrypted key (prints JSON)
+#   quiz.sh publish                                                CI (pr-quiz-publish.yml): put a quiz on the PR's pr-quiz check
+#   quiz.sh answer                                                 CI (pr-quiz.yml): grade one reviewer's answers
 #
 # The answers never appear in clear text: they are encrypted with public.pem (RSA-OAEP) together with the PR number and head SHA,
 # and only the pr-quiz workflow (environment "pr-quiz", secret PR_QUIZ_PRIVATE_KEY) can decrypt them.
@@ -20,7 +21,7 @@ CHECK_NAME="pr-quiz"
 PUBLIC_KEY="${QUIZ_PUBLIC_KEY:-$DIR/public.pem}"
 GITHUB_ACTIONS_APP_ID=15368
 MARKER="<!-- pr-quiz:v1 "
-RESULT_MARKER="<!-- pr-quiz-result:v1 "
+STATE_MARKER="<!-- pr-quiz-state:v1 "
 TRUSTED='["OWNER","MEMBER","COLLABORATOR"]'
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -52,7 +53,7 @@ public_spec() { # $1 spec file, $2 pr, $3 sha, $4 url -> public spec (answers re
 }
 
 cmd_build() {
-  local spec="$1" pr="$2" sha="$3" url="$4" html="${5:-}"
+  local spec="$1" pr="$2" sha="$3" url="$4" out="$5"
   cmd_validate "$spec"
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || die "head sha must be a full 40-character commit sha"
   local answers key public
@@ -60,24 +61,10 @@ cmd_build() {
   key="$(jq -cn --argjson pr "$pr" --arg sha "$sha" --arg answers "$answers" '{pr: $pr, sha: $sha, answers: $answers}' \
     | openssl pkeyutl -encrypt -pubin -inkey "$PUBLIC_KEY" -pkeyopt rsa_padding_mode:oaep | openssl base64 -A)"
   public="$(public_spec "$spec" "$pr" "$sha" "$url")"
-  jq -r -f "$DIR/render-markdown.jq" <<<"$public"
-  printf '\n%s%s -->\n' "$MARKER" "$(jq -c --arg key "$key" '. + {ciphertext: $key}' <<<"$public" | openssl base64 -A)"
-  if [[ -n "$html" ]]; then jq -r -f "$DIR/render-html.jq" <<<"$public" >"$html"; fi
-}
-
-payload_from_body() { # stdin: comment body -> payload JSON (empty if none)
-  local b64
-  b64="$(grep -o "${MARKER}[A-Za-z0-9+/=]* -->" | tail -1 | sed -e "s|^${MARKER}||" -e 's| -->$||' || true)"
-  [[ -n "$b64" ]] && openssl base64 -d -A <<<"$b64"
-}
-
-cmd_parse_answers() {
-  local first rest
-  first="$(printf '%s\n' "$1" | head -1 | tr '[:lower:]' '[:upper:]')"
-  [[ "$first" =~ ^[[:space:]]*/QUIZ([[:space:]]|$) ]] || return 1
-  rest="$(sed -E 's#^[[:space:]]*/QUIZ##; s/[0-9]+//g; s/[][[:space:],;.:()-]//g' <<<"$first")"
-  [[ "$rest" =~ ^[A-D]+$ ]] || return 1
-  echo "$rest"
+  jq -r -f "$DIR/render-markdown.jq" <<<"$public" >"$out/pr-$pr-quiz.md"
+  jq -r -f "$DIR/render-html.jq" <<<"$public" >"$out/pr-$pr-summary.html"
+  jq -c --arg key "$key" '. + {ciphertext: $key}' <<<"$public" | openssl base64 -A
+  echo
 }
 
 cmd_check_answers() { # $1 payload file, $2 answers, $3 private key file
@@ -91,21 +78,34 @@ cmd_check_answers() { # $1 payload file, $2 answers, $3 private key file
     | {correct: $correct, total: $total, score: (($correct * 100 / $total) | floor), passed: ($correct * 100 >= $pass * $total)}'
 }
 
-# ---------- CI (GH_TOKEN, REPO, PR, RUN_URL, PR_QUIZ_PRIVATE_KEY and optionally OUT_DIR are set by the workflow) ----------
+# ---------- CI ----------
+# Set by the workflows: GH_TOKEN, REPO, PR, RUN_URL, PR_QUIZ_PRIVATE_KEY, optionally OUT_DIR, GITHUB_STEP_SUMMARY, GITHUB_OUTPUT.
+# publish also gets QUIZ (the payload printed by "build"); answer gets ACTOR and reads the q1..q5 inputs from GITHUB_EVENT_PATH,
+# so the answers never show up in the log (Actions prints a step's env values).
 #
-# "sync" is idempotent: it re-reads every comment on the PR, grades each "/quiz" answer that has no result reply yet and then
-# derives the pr-quiz check from the recorded results. A run that is cancelled or re-run therefore loses or repeats nothing.
+# The pr-quiz check on the PR head is the only state. Its summary shows the summary and quiz; its text holds the encrypted
+# payload and the recorded attempts in hidden markers. Only workflows with checks: write can change it, and both quiz workflows
+# share a concurrency group per PR, so updates never interleave.
 
-reply() { # $1 answer comment id, $2 text, $3 extra marker fields (optional)
-  gh api "repos/$REPO/issues/$PR/comments" -f body="$2"$'\n\n'"${RESULT_MARKER}answer=$1${3:+ $3} -->" >/dev/null
+note() { # $1 Markdown for whoever started the run: printed and added to the job summary
+  printf '%s\n' "$1"
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then printf '%s\n\n' "$1" >>"$GITHUB_STEP_SUMMARY"; fi
 }
 
-upsert_check() { # $1 sha, $2 status/conclusion JSON, $3 title, $4 summary
+stop() { note "$1"; exit 1; } # refuse the run; the check is left as it is
+
+latest_check() { # $1 sha -> the latest pr-quiz check run created by GitHub Actions, or {}
+  gh api "repos/$REPO/commits/$1/check-runs?check_name=$CHECK_NAME&filter=all&per_page=100" \
+    --jq "[.check_runs[] | select(.app.id == $GITHUB_ACTIONS_APP_ID)] | max_by(.id) // {}"
+}
+
+upsert_check() { # $1 sha, $2 status/conclusion JSON, $3 title, $4 summary, $5 text, $6 details url
   local id fields
-  fields="$(jq -c --arg title "$3" --arg summary "$4" --arg url "$RUN_URL" \
-    '. + {details_url: $url, output: {title: $title, summary: $summary}}' <<<"$2")"
-  id="$(gh api "repos/$REPO/commits/$1/check-runs?check_name=$CHECK_NAME&filter=latest" \
-    --jq "[.check_runs[] | select(.app.id == $GITHUB_ACTIONS_APP_ID)][0].id // empty")"
+  fields="$(jq -c --arg title "$3" --arg summary "$4" --arg text "$5" --arg url "$6" \
+    '. + {details_url: $url, output: {title: $title, summary: $summary, text: $text}}' <<<"$2")"
+  # A completed check run can't go back to pending, so a new quiz after a pass or failure gets a new run. The ruleset and
+  # latest_check both use the newest run.
+  id="$(latest_check "$1" | jq -r --argjson f "$fields" 'select(.status != "completed" or $f.status == "completed") | .id // empty')"
   if [[ -n "$id" ]]; then
     gh api --method PATCH "repos/$REPO/check-runs/$id" --input - >/dev/null <<<"$fields"
   else
@@ -114,164 +114,156 @@ upsert_check() { # $1 sha, $2 status/conclusion JSON, $3 title, $4 summary
   fi
 }
 
-fail_check() { # $1 sha, $2 title, $3 summary. Replaces an earlier pass: the latest quiz decides.
-  upsert_check "$1" '{"status":"completed","conclusion":"failure"}' "$2" "$3"
+marker_value() { # $1 check JSON, $2 marker -> the value of the last "<marker>value -->" line in the check text
+  jq -r --arg m "$2" '[.output.text // "" | split("\n")[] | select(startswith($m)) | ltrimstr($m) | rtrimstr(" -->")] | last // empty' <<<"$1"
 }
 
-reply_all() { # $1 answers JSON, $2 text
-  jq -r '.[].id' <<<"$1" | while read -r id; do reply "$id" "$2"; done
-}
-
-cmd_sync() {
-  local out="${OUT_DIR:-.}" pr_json head reviewers quiz quiz_id errors unreplied answers stale others results passed n
-  local id node login body given result attempts left title
-  tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
-  gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" --jq '.[]' | jq -s 'sort_by(.id)' >"$tmp/comments.json"
+load_pr() { # sets pr_json, head, reviewers; refuses closed PRs and head commits shared with another open PR
+  local others
+  [[ "$PR" =~ ^[0-9]+$ ]] || stop "❌ \`$PR\` is not a pull request number."
   pr_json="$(gh api "repos/$REPO/pulls/$PR")"
+  [[ "$(jq -r .state <<<"$pr_json")" == "open" ]] || stop "❌ PR #$PR is not open."
   head="$(jq -r .head.sha <<<"$pr_json")"
   # Only people asked to review the PR may answer: requested reviewers, plus those who already reviewed (GitHub drops a
   # reviewer from the request list once they submit a review). Bots and the PR author are never eligible.
-  # GitHub only lets collaborators be requested as reviewers, but anyone can submit a review on a public repo.
-  # Review authors outside $TRUSTED would never get their answers graded (the workflow skips their comments),
-  # so they don't count as reviewers. Otherwise their unused attempts would keep the check pending.
+  # GitHub only lets collaborators be requested as reviewers, but anyone can submit a review on a public repo, so review
+  # authors only count if they are collaborators too.
   reviewers="$({ jq -c '.requested_reviewers[] | {login, type, association: "COLLABORATOR"}' <<<"$pr_json"
                  gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
                    --jq '.[] | {login: .user.login, type: .user.type, association: .author_association}'; } \
     | jq -sc --arg author "$(jq -r .user.login <<<"$pr_json")" --argjson trusted "$TRUSTED" \
         '[.[] | select(.type == "User" and .login != $author and (.association as $a | $trusted | index($a))) | .login] | unique')"
-
-  quiz="$(jq -c --arg m "$MARKER" --argjson trusted "$TRUSTED" \
-    '[.[] | select((.author_association as $a | $trusted | index($a)) and (.body | contains($m)))] | last // empty' "$tmp/comments.json")"
-  quiz_id=0
-  if [[ -n "$quiz" ]]; then quiz_id="$(jq -r .id <<<"$quiz")"; fi
-
-  # "/quiz" comments from trusted authors that have no result reply yet.
-  unreplied="$(jq -c --argjson trusted "$TRUSTED" --arg r "$RESULT_MARKER" '
-    [.[] | select(.user.login == "github-actions[bot]") | .body | capture("\($r)answer=(?<id>[0-9]+)")? | .id | tonumber] as $done
-    | [.[] | select((.author_association as $a | $trusted | index($a)) and (.body | test("^\\s*/quiz"; "i"))
-                    and (.id as $id | $done | index($id) | not))
-         | {id, node_id, login: .user.login, body}]' "$tmp/comments.json")"
-  answers="$(jq -c --argjson q "$quiz_id" '[.[] | select(.id > $q)]' <<<"$unreplied")"
-  stale="$(jq -c --argjson q "$quiz_id" '[.[] | select(.id < $q)]' <<<"$unreplied")"
-
-  if [[ -z "$quiz" ]]; then
-    reply_all "$answers" "⚠️ There is no quiz on this PR yet."
-    return 0
-  fi
-  # Answers to a quiz that was replaced before they were graded. No quiz fields, so they don't count as attempts.
-  reply_all "$stale" "⚠️ A newer quiz was published before this answer was graded. Please answer the latest quiz."
-
-  payload_from_body <<<"$(jq -r .body <<<"$quiz")" >"$tmp/payload.json" || true
-  errors="$(validation_errors "$tmp/payload.json" public 2>&1 || echo "payload is not valid JSON")"
-  if [[ -z "$errors" && "$(jq -r .pr "$tmp/payload.json")" != "$PR" ]]; then errors="the quiz was built for another PR"; fi
-  if [[ -n "$errors" ]]; then
-    reply_all "$answers" "⚠️ The latest quiz is invalid and can't be graded. Ask the author to publish a new one."
-    fail_check "$head" "The latest quiz is invalid" "Publish a new quiz."
-    die "invalid quiz in comment $quiz_id:"$'\n'"$errors"
-  fi
-
-  if [[ "$(jq -r .head_sha "$tmp/payload.json")" != "$head" ]]; then
-    reply_all "$answers" "⚠️ The latest quiz covers commit \`$(jq -r '.head_sha[0:8]' "$tmp/payload.json")\`, but the PR now points at \`${head:0:8}\`. Wait for an updated quiz."
-    echo "::notice::The latest quiz is for an older commit than the PR head ($head); nothing to grade."
-    return 0
-  fi
-
   # The check belongs to the commit, not the PR, so another open PR with the same head would share (and overwrite) it.
   others="$(gh api "repos/$REPO/commits/$head/pulls" \
     --jq "[.[] | select(.state == \"open\" and .head.sha == \"$head\" and .number != $PR) | \"#\\(.number)\"] | join(\", \")")"
   if [[ -n "$others" ]]; then
-    reply_all "$answers" "⚠️ This commit is also the head of $others, and the \`$CHECK_NAME\` check belongs to the commit. Close the other PR, then answer again."
-    fail_check "$head" "Head commit is shared with $others" "Each gated PR needs its own head commit. Close $others, then re-run this check or answer again."
-    die "head commit $head is shared with $others"
+    stop "❌ Commit \`${head:0:8}\` is also the head of $others, and the \`$CHECK_NAME\` check belongs to the commit. Close the other PR first."
   fi
+}
 
-  # Re-apply the server-side constants: a quiz comment cannot lower the pass mark or raise the attempt limit.
-  public_spec "$tmp/payload.json" "$PR" "$head" "$(jq -r .pr_url "$tmp/payload.json")" >"$tmp/public.json"
-  jq -r -f "$DIR/render-markdown.jq" "$tmp/public.json" >"$out/summary.md"
-  jq -r -f "$DIR/render-html.jq" "$tmp/public.json" >"$out/pr-$PR-summary.html"
-  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then cat "$out/summary.md" >>"$GITHUB_STEP_SUMMARY"; fi
-  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then echo "html=$out/pr-$PR-summary.html" >>"$GITHUB_OUTPUT"; fi
+verify_payload() { # $1 payload file -> validation errors for this PR and head (empty when fine)
+  local errors
+  errors="$(validation_errors "$1" public 2>&1 || echo "the payload is not valid JSON")"
+  if [[ -z "$errors" && "$(jq -r .pr "$1")" != "$PR" ]]; then errors="the quiz was built for another PR"; fi
+  if [[ -z "$errors" && "$(jq -r .head_sha "$1")" != "$head" ]]; then
+    errors="the quiz covers commit $(jq -r '.head_sha[0:8]' "$1"), but the PR head is ${head:0:8}"
+  fi
+  printf '%s' "$errors"
+}
 
-  # Recorded results for this quiz: [{by, passed}]. Attempts are counted per reviewer.
-  results="$(jq -c --arg r "$RESULT_MARKER" --arg q "$quiz_id" '
-    [.[] | select(.user.login == "github-actions[bot]") | .body
-     | capture("\($r)answer=[0-9]+ quiz=(?<quiz>[0-9]+) sha=[0-9a-f]+ attempt=[0-9]+ passed=(?<passed>true|false) by=(?<by>[^ ]+)")?
-     | select(.quiz == $q) | {by, passed: (.passed == "true")}]' "$tmp/comments.json")"
-  passed="$(jq -r 'any(.passed)' <<<"$results")"
+key_works() { # $1 payload file, $2 key file, $3 question count: the answer key decrypts and belongs to this PR and commit
+  (cmd_check_answers "$1" "$(printf "%${3}s" | tr " " A)" "$2" >/dev/null 2>&1)
+}
+
+answer_url() { echo "${GITHUB_SERVER_URL:-https://github.com}/$REPO/actions/workflows/pr-quiz.yml"; }
+
+update_check() { # $1 public spec file, $2 state JSON {quiz, details_url, results: [{by, passed}]}, $3 payload (base64)
+  local summary text left title passed_by
+  summary="$(jq -r -f "$DIR/render-markdown.jq" "$1")"
+  text="$MARKER$3 -->"$'\n'"$STATE_MARKER$(jq -c . <<<"$2") -->"
+  passed_by="$(jq -r '[.results[] | select(.passed) | "@\(.by)"] | first // empty' <<<"$2")"
+  left="$(jq -c --argjson s "$2" --argjson max "$MAX_ATTEMPTS" \
+    'map(. as $l | {login: $l, used: ([$s.results[] | select(.by == $l)] | length)}) | map(select(.used < $max))' <<<"$reviewers")"
+  if [[ -n "$passed_by" ]]; then
+    upsert_check "$head" '{"status":"completed","conclusion":"success"}' "Quiz passed by $passed_by" "$summary" "$text" "$(jq -r .details_url <<<"$2")"
+  elif [[ "$reviewers" == "[]" ]]; then
+    upsert_check "$head" '{"status":"in_progress"}' "Waiting for a reviewer to be requested" \
+      "> Only reviewers requested on this PR can answer the quiz. Request one from the PR sidebar."$'\n\n'"$summary" "$text" "$(jq -r .details_url <<<"$2")"
+  elif [[ "$left" == "[]" ]]; then
+    upsert_check "$head" '{"status":"completed","conclusion":"failure"}' "Quiz not passed, no attempts left" \
+      "> Every requested reviewer used all $MAX_ATTEMPTS attempts. Publish a new quiz to try again."$'\n\n'"$summary" "$text" "$(jq -r .details_url <<<"$2")"
+  else
+    title="$(jq -r --argjson max "$MAX_ATTEMPTS" 'if all(.used == 0) then "Waiting for a reviewer to pass the quiz"
+      else "Not passed yet (" + (map("@\(.login): \(.used) of \($max) attempts used") | join(", ")) + ")" end' <<<"$left")"
+    upsert_check "$head" '{"status":"in_progress"}' "$title" "$summary" "$text" "$(jq -r .details_url <<<"$2")"
+  fi
+}
+
+cmd_publish() {
+  local out="${OUT_DIR:-.}" errors n state
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  [[ "${QUIZ:-}" =~ ^[A-Za-z0-9+/=]+$ ]] || stop "❌ The quiz payload is missing or is not base64. Use publish-quiz.sh."
+  load_pr
+  openssl base64 -d -A <<<"$QUIZ" >"$tmp/payload.json" 2>/dev/null || true
+  errors="$(verify_payload "$tmp/payload.json")"
+  [[ -z "$errors" ]] || stop "❌ The quiz can't be published:"$'\n\n'"$errors"
   n="$(jq '.questions | length' "$tmp/payload.json")"
-
-  # Verify the answer key on every run until the quiz is passed, so a re-run without new answers still reports a broken key.
-  if [[ "$passed" != "true" ]]; then
-    (umask 077 && printf '%s\n' "${PR_QUIZ_PRIVATE_KEY:-}" >"$tmp/key.pem")
-    if ! (cmd_check_answers "$tmp/payload.json" "$(printf "%${n}s" | tr " " A)" "$tmp/key.pem" >/dev/null); then
-      rm -f "$tmp/key.pem"
-      reply_all "$answers" "⚠️ This quiz can't be graded: its answer key could not be decrypted or doesn't match this PR (for example after a key rotation). Ask the author to publish a new quiz. This did not count as an attempt."
-      fail_check "$head" "Quiz can't be graded" "The answer key could not be decrypted. Publish a new quiz."
-      die "the answer key of quiz $quiz_id could not be decrypted or verified"
-    fi
-  fi
-
-  while read -r answer <&3; do
-    id="$(jq -r .id <<<"$answer")"; node="$(jq -r .node_id <<<"$answer")"; login="$(jq -r .login <<<"$answer")"
-    body="$(jq -r .body <<<"$answer")"
-    if ! jq -e --arg l "$login" 'index($l)' <<<"$reviewers" >/dev/null; then
-      reply "$id" "⚠️ @$login, only reviewers requested on this PR can answer its quiz (not the PR author, bots or agents). Ask the author to request your review, then answer again. This did not count as an attempt."
-      continue
-    fi
-    if [[ "$passed" == "true" ]]; then reply "$id" "✅ This quiz has already been passed."; continue; fi
-    attempts="$(jq --arg l "$login" '[.[] | select(.by == $l)] | length' <<<"$results")"
-    if (( attempts >= MAX_ATTEMPTS )); then
-      reply "$id" "⛔ @$login, you have no attempts left for this quiz. Re-read the summary and ask the author to publish a new quiz."; continue
-    fi
-    if ! given="$(cmd_parse_answers "$body")"; then
-      reply "$id" "⚠️ Could not read your answers. Use one letter per question, in order, for example \`/quiz B C A\`. This did not count as an attempt."; continue
-    fi
-    if (( ${#given} != n )); then
-      reply "$id" "⚠️ Expected $n answers but got ${#given}. This did not count as an attempt."; continue
-    fi
-    result="$(cmd_check_answers "$tmp/payload.json" "$given" "$tmp/key.pem")"
-    attempts=$((attempts + 1))
-    passed="$(jq -r .passed <<<"$result")"
-    results="$(jq -c --arg l "$login" --argjson p "$passed" '. + [{by: $l, passed: $p}]' <<<"$results")"
-    if [[ "$passed" == "true" ]]; then
-      reply "$id" "✅ @$login passed the quiz ($(jq -r .score <<<"$result")%)." "quiz=$quiz_id sha=$head attempt=$attempts passed=true by=$login"
-      # Hide the correct answers from later reviewers. Best effort only.
-      gh api graphql -f id="$node" \
-        -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) { clientMutationId } }' >/dev/null || true
-    else
-      # Only pass/fail is reported: a per-attempt score would tell the reviewer how many guesses were right.
-      reply "$id" "❌ @$login, not passed. The pass mark is ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts))." "quiz=$quiz_id sha=$head attempt=$attempts passed=false by=$login"
-    fi
-  done 3< <(jq -c '.[]' <<<"$answers")
+  (umask 077 && printf '%s\n' "${PR_QUIZ_PRIVATE_KEY:-}" >"$tmp/key.pem")
+  key_works "$tmp/payload.json" "$tmp/key.pem" "$n" \
+    || stop "❌ The answer key can't be decrypted with this repository's private key, or doesn't belong to PR #$PR at \`${head:0:8}\`. Was public.pem rotated? Rebuild the quiz."
   rm -f "$tmp/key.pem"
 
-  if [[ "$passed" == "true" ]]; then
-    upsert_check "$head" '{"status":"completed","conclusion":"success"}' "Quiz passed" "$(cat "$out/summary.md")"
-  else
-    # Reviewers who can still answer, and a per-reviewer attempt overview for the check summary.
-    left="$(jq -c --argjson results "$results" --argjson max "$MAX_ATTEMPTS" \
-      'map(. as $l | {login: $l, used: ([$results[] | select(.by == $l)] | length)}) | map(select(.used < $max))' <<<"$reviewers")"
-    if [[ "$reviewers" == "[]" ]]; then
-      upsert_check "$head" '{"status":"in_progress"}' "Waiting for a reviewer to be requested" \
-        "Only reviewers requested on this PR can answer the quiz."$'\n\n'"$(cat "$out/summary.md")"
-    elif [[ "$left" == "[]" ]]; then
-      fail_check "$head" "Quiz not passed, no attempts left" "Every requested reviewer used all $MAX_ATTEMPTS attempts. Publish a new quiz to try again."$'\n\n'"$(cat "$out/summary.md")"
-    else
-      title="$(jq -r --argjson max "$MAX_ATTEMPTS" 'if all(.used == 0) then "Waiting for a reviewer to pass the quiz"
-        else "Not passed yet (" + (map("@\(.login): \(.used) of \($max) attempts used") | join(", ")) + ")" end' <<<"$left")"
-      upsert_check "$head" '{"status":"in_progress"}' "$title" \
-        "Requested reviewers answer with a \`/quiz …\` PR comment."$'\n\n'"$(cat "$out/summary.md")"
-    fi
+  # Re-apply the server-side constants: a payload cannot lower the pass mark or raise the attempt limit.
+  public_spec "$tmp/payload.json" "$PR" "$head" "$(jq -r .pr_url "$tmp/payload.json")" >"$tmp/public.json"
+  jq -r -f "$DIR/render-html.jq" "$tmp/public.json" >"$out/pr-$PR-summary.html"
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then echo "html=$out/pr-$PR-summary.html" >>"$GITHUB_OUTPUT"; fi
+  # A new quiz starts with no attempts, even if an earlier quiz on this commit was passed: the latest quiz decides.
+  state="$(jq -cn --arg quiz "${GITHUB_RUN_ID:-local}" --arg url "$RUN_URL" '{quiz: $quiz, details_url: $url, results: []}')"
+  update_check "$tmp/public.json" "$state" "$QUIZ"
+  note "✅ Quiz published on PR #$PR for commit \`${head:0:8}\`. Reviewers answer it at $(answer_url)."$'\n\n'"$(jq -r -f "$DIR/render-markdown.jq" "$tmp/public.json")"
+  echo "PR #$PR quiz published at $head: reviewers=$reviewers"
+}
+
+cmd_answer() {
+  local check payload state errors n given result attempts passed
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  load_pr
+  check="$(latest_check "$head")"
+  payload="$(marker_value "$check" "$MARKER")"
+  state="$(marker_value "$check" "$STATE_MARKER")"
+  if [[ -z "$payload" || -z "$state" ]]; then
+    stop "⚠️ PR #$PR has no quiz for its current head commit \`${head:0:8}\`. A new push makes the previous quiz stale; wait for the author to publish a new one. This did not count as an attempt."
   fi
-  echo "PR #$PR quiz $quiz_id at $head: reviewers=$reviewers results=$results"
+  openssl base64 -d -A <<<"$payload" >"$tmp/payload.json" 2>/dev/null || true
+  errors="$(verify_payload "$tmp/payload.json")"
+  [[ -z "$errors" ]] || stop "❌ The quiz on the \`$CHECK_NAME\` check can't be graded ($errors). Ask the author to publish a new one."
+  public_spec "$tmp/payload.json" "$PR" "$head" "$(jq -r .pr_url "$tmp/payload.json")" >"$tmp/public.json"
+  n="$(jq '.questions | length' "$tmp/payload.json")"
+
+  if ! jq -e --arg l "$ACTOR" 'index($l)' <<<"$reviewers" >/dev/null; then
+    stop "⚠️ @$ACTOR, only reviewers requested on PR #$PR can answer its quiz (not the PR author, bots or agents). Ask the author to request your review, then answer again. This did not count as an attempt."
+  fi
+  if jq -e '.results | any(.passed)' <<<"$state" >/dev/null; then
+    note "✅ The quiz on PR #$PR has already been passed."; return 0
+  fi
+  attempts="$(jq --arg l "$ACTOR" '[.results[] | select(.by == $l)] | length' <<<"$state")"
+  if (( attempts >= MAX_ATTEMPTS )); then
+    stop "⛔ @$ACTOR, you have no attempts left for this quiz. Re-read the summary and ask the author to publish a new quiz."
+  fi
+  given="$(jq -r '[.inputs.q1, .inputs.q2, .inputs.q3, .inputs.q4, .inputs.q5] | map((. // "-") | ascii_upcase) | join("")' "${GITHUB_EVENT_PATH:?}")"
+  if ! [[ "$given" =~ ^[A-D]{$n}-*$ ]]; then
+    stop "⚠️ This quiz has $n questions: choose an answer for Q1 to Q$n and leave the other questions at \`-\`. This did not count as an attempt."
+  fi
+  given="${given:0:$n}"
+
+  (umask 077 && printf '%s\n' "${PR_QUIZ_PRIVATE_KEY:-}" >"$tmp/key.pem")
+  if ! result="$(cmd_check_answers "$tmp/payload.json" "$given" "$tmp/key.pem" 2>/dev/null)"; then
+    rm -f "$tmp/key.pem"
+    upsert_check "$head" '{"status":"completed","conclusion":"failure"}' "Quiz can't be graded" \
+      "> The answer key could not be decrypted (for example after a key rotation). Publish a new quiz."$'\n\n'"$(jq -r -f "$DIR/render-markdown.jq" "$tmp/public.json")" \
+      "$(jq -r '.output.text' <<<"$check")" "$(jq -r .details_url <<<"$state")"
+    stop "❌ This quiz can't be graded: its answer key could not be decrypted. Ask the author to publish a new quiz. This did not count as an attempt."
+  fi
+  rm -f "$tmp/key.pem"
+  passed="$(jq -r .passed <<<"$result")"
+  state="$(jq -c --arg l "$ACTOR" --argjson p "$passed" '.results += [{by: $l, passed: $p}]' <<<"$state")"
+  update_check "$tmp/public.json" "$state" "$payload"
+  echo "PR #$PR quiz $(jq -r .quiz <<<"$state") at $head: reviewers=$reviewers results=$(jq -c .results <<<"$state")"
+  if [[ "$passed" == "true" ]]; then
+    note "✅ @$ACTOR passed the quiz on PR #$PR ($(jq -r .score <<<"$result")%). The \`$CHECK_NAME\` check is green."
+  else
+    # Only pass/fail is reported: a per-attempt score would tell the reviewer how many guesses were right.
+    stop "❌ @$ACTOR, not passed. The pass mark is ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts - 1)). Re-read the summary on the \`$CHECK_NAME\` check and try again."
+  fi
 }
 
 case "${1:-}" in
   validate) shift; cmd_validate "$@" ;;
   build) shift; cmd_build "$@" ;;
   check-answers) shift; cmd_check_answers "$@" ;;
-  parse-answers) shift; cmd_parse_answers "$@" ;;
-  sync) cmd_sync ;;
-  *) sed -n '2,10p' "$0" >&2; exit 2 ;;
+  publish) cmd_publish ;;
+  answer) cmd_answer ;;
+  *) sed -n '2,11p' "$0" >&2; exit 2 ;;
 esac

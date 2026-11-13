@@ -1,0 +1,60 @@
+# Comprehension quiz gate for PRs into shahab: publishes a quiz on the PR's pr-quiz check.
+#
+# Dispatched by .github/skills/pr-review-loop/scripts/publish-quiz.sh with the payload printed by "quiz.sh build": the summary,
+# the questions and the answer key encrypted with public.pem. "quiz.sh publish" checks that the payload is valid, belongs to the
+# PR's current head commit and decrypts with the private key, then sets the pr-quiz check to pending with the summary and quiz
+# as its Markdown. The HTML version is attached to this run. Publishing again replaces the quiz and resets the attempts.
+# Reviewers answer with pr-quiz.yml. See .github/pr-quiz/README.md.
+name: "PR quiz: publish"
+run-name: "PR quiz: publish for PR #${{ inputs.pr }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
+      quiz:
+        description: Encrypted quiz payload (from publish-quiz.sh)
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pr-quiz
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: read
+    concurrency:
+      group: pr-quiz-${{ inputs.pr }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/pr-quiz
+          persist-credentials: false
+
+      - id: quiz
+        run: mkdir -p out && .github/pr-quiz/quiz.sh publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+          QUIZ: ${{ inputs.quiz }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUT_DIR: out
+          PR_QUIZ_PRIVATE_KEY: ${{ secrets.PR_QUIZ_PRIVATE_KEY }}
+
+      - if: steps.quiz.outputs.html
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.quiz.outputs.html }}
+          archive: false
+          overwrite: true
+          retention-days: 30

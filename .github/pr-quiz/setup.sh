@@ -5,7 +5,8 @@
 #   .github/pr-quiz/setup.sh --rotate     generate a new keypair (old quizzes can no longer be graded); commit public.pem
 #   .github/pr-quiz/setup.sh --activate   also make shahab the default branch and require the pr-quiz check on PRs into it
 #
-# Why the default branch: issue_comment workflows (the "/quiz" answers) only run from the default branch.
+# Why the default branch: GitHub only lists and dispatches workflow_dispatch workflows (the quiz's publish and answer forms)
+# that exist on the default branch.
 set -euo pipefail
 
 REPO="${REPO:-shahabganji/Blog}"

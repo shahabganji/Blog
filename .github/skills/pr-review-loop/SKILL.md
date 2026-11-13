@@ -1,6 +1,6 @@
 ---
 name: pr-review-loop
-description: Drive a pull request to "ready to merge" in a loop. Wait for the Copilot and Gitar reviews, fix or answer every review comment, resolve threads, keep checks green, then publish an intent-focused summary (PR comment + HTML) with a short comprehension quiz that a reviewer must pass (pr-quiz check). Use when asked to create a PR and see it through review, to address bot review comments on a PR, or to publish a PR summary/quiz.
+description: Drive a pull request to "ready to merge" in a loop. Wait for the Copilot and Gitar reviews, fix or answer every review comment, resolve threads, keep checks green, then publish an intent-focused summary (on the pr-quiz check + HTML) with a short comprehension quiz that a requested reviewer must pass through a GitHub Actions form. Use when asked to create a PR and see it through review, to address bot review comments on a PR, or to publish a PR summary/quiz.
 ---
 
 # PR review loop
@@ -13,9 +13,9 @@ Helper scripts (run from the repository root):
 |---|---|
 | `.github/skills/pr-review-loop/scripts/pr-state.sh <pr> [--wait]` | JSON snapshot: head SHA, Copilot/Gitar review status, `missing_reviews`, pending/failing checks, unresolved threads (with `thread_id` and `first_comment_id`), latest bot comments, `ready_for_quiz`. `--wait` blocks until the PR has settled for its head commit. Set `REQUIRED_BOTS` (default `"copilot gitar"`) if a repository has only one of them. |
 | `.github/skills/pr-review-loop/scripts/reply-thread.sh <pr> <first_comment_id> <body-file> [--resolve <thread_id>]` | Reply to a review thread (body from a file, never inline) and optionally resolve it. |
-| `.github/skills/pr-review-loop/scripts/publish-quiz.sh <pr> <quiz.json> [--dry-run]` | Post the summary + quiz comment and write the HTML summary. |
+| `.github/skills/pr-review-loop/scripts/publish-quiz.sh <pr> <quiz.json> [--dry-run]` | Publish the summary + quiz on the PR's `pr-quiz` check (via the "PR quiz: publish" workflow) and write the HTML summary. No PR comment. |
 
-The quiz engine, renderers and grading workflow are documented in `.github/pr-quiz/README.md`.
+The quiz engine, renderers and the publish and answer workflows are documented in `.github/pr-quiz/README.md`.
 
 ## 1. Open the PR
 
@@ -61,8 +61,8 @@ Rules:
 ## 4. Safety rules
 
 - Never merge, close, force-push, rewrite published history, or bypass rulesets.
-- Never weaken a gate to make it pass: no edits to `.github/workflows/pr-quiz.yml`, `.github/workflows/copilot-review-gate.yml`, `.github/pr-quiz/**` or rulesets unless that is the PR's explicit purpose and the user asked for it.
-- Never answer the quiz, and never write the answers anywhere except the private `quiz.json` in the session workspace. Only a human reviewer requested on the PR may answer it. Never request a reviewer yourself just to get the quiz answered; ask the user who should review.
+- Never weaken a gate to make it pass: no edits to `.github/workflows/pr-quiz.yml`, `.github/workflows/pr-quiz-publish.yml`, `.github/workflows/copilot-review-gate.yml`, `.github/pr-quiz/**` or rulesets unless that is the PR's explicit purpose and the user asked for it.
+- Never answer the quiz, and never write the answers anywhere except the private `quiz.json` in the session workspace. Only a human reviewer requested on the PR may answer it. Never run the "PR quiz: answer" workflow, and never request a reviewer yourself just to get the quiz answered; ask the user who should review.
 - Never commit secrets, `appsettings.*` files with real values, or the private quiz spec.
 - Never disable or skip tests or checks to get to green.
 
@@ -92,9 +92,9 @@ Writing the questions:
 - Vary the position of the correct answer; don't put it in the same slot every time.
 
 Then:
-1. `publish-quiz.sh <pr> quiz.json --dry-run`, open the HTML and proofread it.
-2. `publish-quiz.sh <pr> quiz.json`. This posts the comment (older quiz comments are minimized) and the `pr-quiz` workflow sets the `pr-quiz` check to pending.
-3. If the script warns that the gate isn't active yet, tell the user to run `.github/pr-quiz/setup.sh --activate`.
+1. `publish-quiz.sh <pr> quiz.json --dry-run`, open the HTML and the Markdown preview and proofread them.
+2. `publish-quiz.sh <pr> quiz.json`. It dispatches "PR quiz: publish", waits for the run, and prints the `pr-quiz` check, which is now pending with the summary and quiz. Publishing again replaces the quiz and resets the attempts.
+3. If the script says the gate isn't active yet, nothing was published: tell the user to run `.github/pr-quiz/setup.sh --activate`, and share the local HTML summary meanwhile.
 
 Any new push makes the quiz stale: the new head has no `pr-quiz` check. If you push after publishing (for example to fix a late review comment), run the loop again and publish a fresh quiz.
 
@@ -105,4 +105,4 @@ End with a short report:
 - the number of review rounds;
 - the threads fixed, refuted or escalated, with links;
 - the path to the HTML summary;
-- that the PR now waits for a requested human reviewer to pass the quiz (`/quiz …` comment) and to merge it. If no human reviewer is requested, say so: the PR author can't answer their own quiz.
+- that the PR now waits for a requested human reviewer to pass the quiz (`pr-quiz` check → Actions → "PR quiz: answer" → Run workflow) and to merge it. If no human reviewer is requested, say so: the PR author can't answer their own quiz.

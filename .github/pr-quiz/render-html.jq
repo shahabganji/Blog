@@ -1,11 +1,12 @@
 # Renders the public quiz spec (answers stripped) as a self-contained HTML page.
-# The page never contains the answers: the quiz builds the "/quiz ..." comment for the reviewer to paste.
+# The page never contains the answers. Reviewers can tick options while reading; they submit them with the "PR quiz: answer" form.
 # Usage: jq -r -f render-html.jq public-spec.json > summary.html
 def e: tostring | @html;
 def letter($i): "ABCD"[$i:$i+1];
 def list($items): if ($items // []) == [] then "" else "<ul>" + (($items) | map("<li>\(e)</li>") | join("")) + "</ul>" end;
 def card($icon; $title; $body): if ($body // "") == "" then "" else
   "<section class=\"card\"><h2><span class=\"icon\">\($icon)</span>\($title | e)</h2>\($body)</section>" end;
+def answer_url: .pr_url | sub("/pull/[0-9]+$"; "/actions/workflows/pr-quiz.yml");
 def para($text): if ($text // "") == "" then "" else "<p>\($text | e)</p>" end;
 
 "<!doctype html>
@@ -27,9 +28,7 @@ table{width:100%;border-collapse:collapse}td,th{border-top:1px solid var(--borde
 .q{border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin:12px 0}.q h3{font-size:16px;margin:0 0 8px}
 .q label{display:block;padding:6px 10px;border-radius:8px;cursor:pointer}.q label:hover{background:var(--chip)}
 .q input{margin-right:8px}
-.answer{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:16px}
-code#cmd{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:15px}
-button{background:var(--ok);color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}
+.answer{margin-top:16px}.answer a{display:inline-block;background:var(--ok);color:#fff;border-radius:8px;padding:8px 14px;font-weight:600;text-decoration:none}
 .note{color:var(--muted);font-size:14px}
 </style></head><body><main>
 <header><div class=\"meta\">Pull request <a href=\"\(.pr_url | e)\">#\(.pr)</a> · commit <code>\(.head_sha[0:8])</code></div>
@@ -45,18 +44,12 @@ button{background:var(--ok);color:#fff;border:0;border-radius:8px;padding:8px 14
 + card("💬"; "Review discussion"; if (.review_discussion // []) == [] then "" else
     "<ul>" + ((.review_discussion) | map("<li><span class=\"chip\">\(.source | e)</span>\(.topic | e) → \(.outcome | e)</li>") | join("")) + "</ul>" end)
 + "<section class=\"card\"><h2><span class=\"icon\">📝</span>Comprehension quiz</h2>"
-+ "<p class=\"note\">\(.questions | length) question(s). Pass mark \(.pass_mark)%, \(.max_attempts) attempts per reviewer. Only reviewers requested on the pull request can answer. Choose your answers, copy the comment and post it on the pull request.</p>"
++ "<p class=\"note\">\(.questions | length) questions. Pass mark \(.pass_mark)%, \(.max_attempts) attempts per reviewer. Only reviewers requested on the pull request can answer. "
++ "Tick your answers here, then open the answer form, click <b>Run workflow</b>, enter PR <b>\(.pr)</b> and choose the same letters for Q1 to Q\(.questions | length).</p>"
 + ([.questions | to_entries[] | . as $q |
-    "<div class=\"q\"><h3>\($q.key + 1). \($q.value.question | e)</h3>"
+    "<div class=\"q\"><h3>Q\($q.key + 1). \($q.value.question | e)</h3>"
     + ($q.value.options | to_entries | map(
         "<label><input type=\"radio\" name=\"q\($q.key)\" value=\"\(letter(.key))\"><b>\(letter(.key)))</b> \(.value | e)</label>") | join(""))
     + "</div>"] | join(""))
-+ "<div class=\"answer\"><code id=\"cmd\">/quiz …</code><button id=\"copy\" disabled>Copy comment</button>"
-+ "<a href=\"\(.pr_url | e)#new_comment_field\" target=\"_blank\" rel=\"noopener\">Open PR ↗</a></div></section>
-<script>
-const n=\(.questions | length);const cmd=document.getElementById('cmd');const btn=document.getElementById('copy');
-function update(){const a=[];for(let i=0;i<n;i++){const c=document.querySelector('input[name=q'+i+']:checked');a.push(c?c.value:'_');}
-cmd.textContent='/quiz '+a.join(' ');btn.disabled=a.includes('_');}
-document.querySelectorAll('input[type=radio]').forEach(r=>r.addEventListener('change',update));
-btn.addEventListener('click',()=>navigator.clipboard.writeText(cmd.textContent).then(()=>{btn.textContent='Copied ✓';setTimeout(()=>btn.textContent='Copy comment',1500);}));
-</script></main></body></html>"
++ "<div class=\"answer\"><a href=\"\(answer_url | e)\" target=\"_blank\" rel=\"noopener\">Open the answer form ↗</a></div></section>
+</main></body></html>"

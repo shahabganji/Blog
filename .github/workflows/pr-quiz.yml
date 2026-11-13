@@ -1,37 +1,64 @@
-# Comprehension quiz gate for PRs into shahab.
+# Comprehension quiz gate for PRs into shahab: the answer form.
 #
-# 1. The pr-review-loop skill posts a summary + quiz comment containing an encrypted answer key (see .github/pr-quiz/README.md).
-# 2. A requested reviewer (not the PR author, not a bot) answers with a comment such as "/quiz B C A".
-# Either comment runs "quiz.sh sync": it renders the HTML summary (run artifact + job summary), grades every answer that has
-# not been graded yet and sets the pr-quiz check on the PR head: pending, passed (score >= 90%) or failed (every reviewer used 3 attempts).
-# Sync is idempotent and works from the comment history, so a run that is cancelled by the concurrency group or re-run
-# loses or repeats nothing.
+# 1. The pr-review-loop skill publishes a summary and quiz with pr-quiz-publish.yml. It appears on the PR's pr-quiz check.
+# 2. A requested reviewer (not the PR author, not a bot) opens this workflow in the Actions tab, clicks "Run workflow", enters
+#    the PR number and picks one letter per question. GitHub records who started the run (github.triggering_actor), so no
+#    comment is needed. The answers are read from the event file, never from env, so they don't show up in the log.
+# 3. "quiz.sh answer" grades the attempt and sets the pr-quiz check: pending, passed (score >= 90%) or failed (every reviewer
+#    used 3 attempts). The run itself fails when the answer did not pass or was refused, with the reason in its summary.
 #
-# issue_comment workflows always run from the default branch, so PR code (or an AI agent working on it) cannot change how it is
-# graded, and the private key lives in the "pr-quiz" environment, which only the shahab branch can use.
-name: pr-quiz
+# workflow_dispatch workflows are listed and dispatched from the default branch, and the "pr-quiz" environment (which holds the
+# private key) only accepts the shahab branch. A PR (or an AI agent working on it) cannot change how it is graded.
+name: "PR quiz: answer"
+run-name: "PR quiz: @${{ github.triggering_actor }} answers PR #${{ inputs.pr }}"
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
+      q1:
+        description: Q1
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+      q2:
+        description: Q2
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+      q3:
+        description: Q3 (leave at - if the quiz has fewer questions)
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+      q4:
+        description: Q4 (leave at - if the quiz has fewer questions)
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
+      q5:
+        description: Q5 (leave at - if the quiz has fewer questions)
+        type: choice
+        default: "-"
+        options: ["-", A, B, C, D]
 
 permissions: {}
 
 jobs:
-  sync:
-    if: >-
-      github.event.issue.pull_request &&
-      (contains(github.event.comment.body, '<!-- pr-quiz:v1 ') || startsWith(github.event.comment.body, '/quiz')) &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+  answer:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: pr-quiz
     permissions:
+      contents: read
       checks: write
-      issues: write
-      pull-requests: write
+      pull-requests: read
+    # Shared with pr-quiz-publish.yml, so the check is never updated by two runs at once.
     concurrency:
-      group: pr-quiz-${{ github.event.issue.number }}
+      group: pr-quiz-${{ inputs.pr }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
@@ -39,20 +66,11 @@ jobs:
           sparse-checkout: .github/pr-quiz
           persist-credentials: false
 
-      - id: quiz
-        run: mkdir -p out && .github/pr-quiz/quiz.sh sync
+      - run: .github/pr-quiz/quiz.sh answer
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ github.event.issue.number }}
+          PR: ${{ inputs.pr }}
+          ACTOR: ${{ github.triggering_actor }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          OUT_DIR: out
           PR_QUIZ_PRIVATE_KEY: ${{ secrets.PR_QUIZ_PRIVATE_KEY }}
-
-      - if: always() && steps.quiz.outputs.html
-        uses: actions/upload-artifact@v7
-        with:
-          path: ${{ steps.quiz.outputs.html }}
-          archive: false
-          overwrite: true
-          retention-days: 30
