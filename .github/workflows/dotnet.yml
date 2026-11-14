@@ -1,7 +1,10 @@
 name: dotnet
 
+# Pull requests (from any branch) are checked on their pull_request event. Pushes are only checked on long-lived branches;
+# checking every branch push too would run everything twice for each push to a PR branch.
 on:
   push:
+    branches: [ shahab, master ]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -39,6 +42,8 @@ jobs:
         exit "$status"
 
   build:
+    # Only build once the formatting check has passed.
+    needs: format
     # Same OS and architecture as the App Service the blog runs on (Linux, x64).
     runs-on: ubuntu-latest
 
