@@ -180,7 +180,8 @@ load_pr() { # sets pr_json, head, reviewers; refuses closed PRs and head commits
   local others author
   [[ "$PR" =~ ^[0-9]+$ ]] || stop "❌ \`$PR\` is not a pull request number."
   pr_json="$(gh api "repos/$REPO/pulls/$PR")"
-  [[ "$(jq -r .state <<<"$pr_json")" == "open" ]] || stop "❌ PR #$PR is not open."
+  # A closed or merged PR's quiz comment is its record (with the answers marked if it was passed), so leave it as it is.
+  [[ "$(jq -r .state <<<"$pr_json")" == "open" ]] || { COMMENT_ID=""; stop "❌ PR #$PR is not open."; }
   head="$(jq -r .head.sha <<<"$pr_json")"
   # Only people asked to review the PR may answer: requested reviewers, plus those who already reviewed (GitHub drops a
   # reviewer from the request list once they submit a review). Bots and the PR author are never eligible.
