@@ -96,7 +96,7 @@ Then:
 2. `publish-quiz.sh <pr> quiz.json`. It dispatches "PR quiz: publish", waits for the run, and prints the `pr-quiz` check, which is now pending with the summary and quiz. Publishing again replaces the quiz and resets the attempts.
 3. If the script says the gate isn't active yet, nothing was published: tell the user to run `.github/pr-quiz/setup.sh --activate`, and share the local HTML summary meanwhile.
 
-Any new push makes the quiz stale: the new head has no `pr-quiz` check. If you push after publishing (for example to fix a late review comment), run the loop again and publish a fresh quiz.
+Any new push makes the quiz stale: the new head has no `pr-quiz` check. If you push after publishing (for example to fix a late review comment), run the loop again and publish a fresh quiz. If the previous quiz was already passed, its correct answers are visible in the quiz comment's history, so the fresh quiz must use new or reworded questions, with the options in a different order.
 
 ## 6. Report back
 
