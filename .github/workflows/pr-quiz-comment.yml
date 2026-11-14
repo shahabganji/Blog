@@ -3,7 +3,8 @@
 # pr-quiz-publish.yml posts the summary and the questions as a comment with one checkbox per option and a "Submit my answers"
 # box. Ticking a box edits the comment, which triggers this workflow; it only runs once Submit is ticked. "quiz.sh answer"
 # then grades the ticked boxes as the person who made that edit (github.event.sender, which GitHub sets), with the same rules
-# as the Actions form in pr-quiz.yml, updates the pr-quiz check and rewrites the comment with the result.
+# as the Actions form in pr-quiz.yml, updates the pr-quiz check and rewrites the comment with the result. It only grades if
+# the comment's edit history shows no edits by anyone else since the workflow last wrote it (and cleared the boxes).
 #
 # Every comment edit in the repository starts a run of this workflow, but the job is skipped unless it is the quiz comment
 # (written by github-actions[bot]) with Submit ticked. Edits made with GITHUB_TOKEN don't trigger workflows, so rewriting the

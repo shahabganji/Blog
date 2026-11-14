@@ -1,11 +1,9 @@
 # Renders the quiz comment on the PR: the summary, then each question as checkboxes and a Submit box.
-# Ticking a box edits the comment, which triggers pr-quiz.yml (issue_comment: edited); quiz.sh reads the ticked boxes from the
+# Ticking a box edits the comment, which triggers pr-quiz-comment.yml (issue_comment: edited); quiz.sh reads the ticked boxes from the
 # hidden markers at the end of each line. The comment never contains the answers.
-# Input: the public quiz spec plus .form = {open: bool, notice: Markdown, selected: ["A", "", "BC", ...] (per question)}.
+# Input: the public quiz spec plus .form = {open: bool, notice: Markdown}. Every box is rendered unticked.
 # Usage: jq -r -L <this directory> -f render-comment.jq
 include "summary";
-
-def box($on): if $on then "[x]" else "[ ]" end;
 
 .form as $f
 | "<!-- pr-quiz-form:v1 pr=\(.pr) quiz=\(.quiz_id) -->\n"
@@ -17,7 +15,7 @@ def box($on): if $on then "[x]" else "[ ]" end;
 + ([.questions | to_entries[] | .key as $i |
     "**Q\($i + 1). \(.value.question | oneline)**\n\n"
     + (.value.options | to_entries | map(letter(.key) as $l |
-        if $f.open then "- \(box(($f.selected[$i] // "") | contains($l))) \($l)) \(.value | oneline) <!-- pr-quiz:q\($i + 1):\($l) -->"
+        if $f.open then "- [ ] \($l)) \(.value | oneline) <!-- pr-quiz:q\($i + 1):\($l) -->"
         else "- \($l)) \(.value | oneline)" end) | join("\n"))
   ] | join("\n\n"))
 + (if $f.open then "\n\n- [ ] **Submit my answers** <!-- pr-quiz:submit -->\n\n"

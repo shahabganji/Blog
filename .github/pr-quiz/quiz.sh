@@ -110,9 +110,9 @@ stop() { # refuse the run; the check is left as it is
   exit 1
 }
 
-refuse() { # $1 message, $2 boxes to keep ticked (JSON, [] clears them): refuse the answer and show why in the quiz comment
+refuse() { # $1 message: refuse the answer, and show why in the quiz comment with its boxes cleared
   if [[ -n "${COMMENT_ID:-}" ]]; then
-    write_form "$tmp/public.json" "$state" "$1" "$2" || true
+    write_form "$tmp/public.json" "$state" "$1" || true
     COMMENT_ID=""
   fi
   stop "$1"
@@ -131,12 +131,11 @@ write_comment() { # $1 body: update the quiz comment on the PR, or create it
   fi
 }
 
-write_form() { # $1 public spec file, $2 state JSON, $3 notice, $4 ticked boxes per question (JSON): render the quiz comment
+write_form() { # $1 public spec file, $2 state JSON, $3 notice: render the quiz comment, with every box cleared
   local open body
-  # Open while nobody has passed and someone may still answer (no reviewer requested yet counts: one can be requested).
-  open="$(jq -n --argjson s "$2" --argjson r "$reviewers" --argjson max "$MAX_ATTEMPTS" \
-    '($s.results | any(.passed) | not) and (($r | length) == 0 or any($r[]; . as $l | ([$s.results[] | select(.by == $l)] | length) < $max))')"
-  if ! body="$(jq -c --argjson open "$open" --arg notice "$3" --argjson sel "$4" '. + {form: {open: $open, notice: $notice, selected: $sel}}' "$1" \
+  # Open until someone passes: a reviewer requested later gets their own attempts, and grading enforces each person's limit.
+  open="$(jq -n --argjson s "$2" '$s.results | any(.passed) | not')"
+  if ! body="$(jq -c --argjson open "$open" --arg notice "$3" '. + {form: {open: $open, notice: $notice}}' "$1" \
       | jq -r -L "$DIR" -f "$DIR/render-comment.jq")" || ! write_comment "$body"; then
     note "⚠️ The quiz comment on PR #$PR could not be updated; the \`$CHECK_NAME\` check is up to date."
   fi
@@ -258,16 +257,27 @@ cmd_publish() {
   # A new quiz starts with no attempts, even if an earlier quiz on this commit was passed: the latest quiz decides.
   state="$(jq -cn --arg quiz "${GITHUB_RUN_ID:-local}" --arg url "$RUN_URL" '{quiz: $quiz, details_url: $url, results: []}')"
   update_check "$tmp/public.json" "$state" "$QUIZ"
-  write_form "$tmp/public.json" "$state" "" '[]'
+  write_form "$tmp/public.json" "$state" ""
   note "✅ Quiz published on PR #$PR for commit \`${head:0:8}\`. Reviewers answer it in the quiz comment on the PR, or at $(answer_url)."$'\n\n'"$(jq -r -L "$DIR" -f "$DIR/render-markdown.jq" "$tmp/public.json")"
   echo "PR #$PR quiz published at $head: reviewers=$reviewers"
 }
 
+comment_editors() { # $1 comment node ID -> logins of everyone who edited the comment since this workflow last wrote it
+  # GitHub keeps every edit of a comment (newest first, the oldest being its creation) with who made it. Prints "?" if the
+  # workflow's last write isn't among the last 100 edits.
+  local edits
+  edits="$(gh api graphql -f id="$1" -f query='query($id: ID!) { node(id: $id) { ... on IssueComment {
+      userContentEdits(first: 100) { nodes { editor { __typename login } } } } } }' \
+    --jq '[.data.node.userContentEdits.nodes[] | .editor // {}
+      | if .__typename == "Bot" then "bot:" + (.login | sub("\\[bot\\]$"; "")) else .login // "ghost" end]')" || return 1
+  jq -r --arg bot "bot:${BOT_LOGIN%\[bot\]}" 'index($bot) as $i | if $i == null then "?" else .[:$i] | unique | join(" ") end' <<<"$edits"
+}
+
 read_answers() { # $1 question count -> sets given_id (quiz ID) and selected (JSON: ticked letters per question) from the event
-  local ev="${GITHUB_EVENT_PATH:?}" form
+  local ev="${GITHUB_EVENT_PATH:?}" form editors
   if [[ -n "${COMMENT_ID:-}" ]]; then
-    # Only the quiz comment written by this workflow, on this PR, and only boxes ticked by whoever made this edit (a re-run
-    # by someone else would otherwise answer in the editor's name).
+    # Only the quiz comment written by this workflow, on this PR, submitted by whoever made this edit (a re-run by someone
+    # else would otherwise answer in the editor's name).
     form="$(jq -c --arg bot "$BOT_LOGIN" --arg pr "$PR" '
       (.comment.body // "" | gsub("\r"; "") | split("\n")) as $lines
       | ($lines[0] | capture("^<!-- pr-quiz-form:v1 pr=(?<pr>[0-9]+) quiz=(?<id>[0-9a-z]+) -->$")? // {}) as $h
@@ -276,6 +286,14 @@ read_answers() { # $1 question count -> sets given_id (quiz ID) and selected (JS
     [[ "$(jq -r .ok <<<"$form")" == "true" ]] || { COMMENT_ID=""; stop "❌ That comment is not the quiz comment of PR #$PR."; }
     [[ "$(jq -r .sender <<<"$form")" == "$ACTOR" ]] || { COMMENT_ID=""; stop "❌ Only the person who ticked Submit can submit those answers."; }
     jq -e '.ticks | index("submit")' <<<"$form" >/dev/null || { COMMENT_ID=""; note "Submit is not ticked; nothing to grade."; exit 0; }
+    # The event only has the comment's current text, not who ticked each box. So every edit since this workflow last
+    # wrote the comment (which clears the boxes) must be the submitter's; otherwise someone could tick the answers for them.
+    editors="$(comment_editors "$(jq -r '.comment.node_id // ""' "$ev")")" || editors="?"
+    if [[ "$editors" == "?" || -z "$editors" ]]; then
+      refuse "⚠️ @$ACTOR, it couldn't be checked who ticked the boxes, so the answers weren't graded and the boxes are cleared. Tick your answers again, then Submit (or use the Actions form). This did not count as an attempt."
+    elif [[ "$editors" != "$ACTOR" ]]; then
+      refuse "⚠️ @$ACTOR, this comment was also edited by $(tr ' ' '\n' <<<"$editors" | grep -vxF "$ACTOR" | sed 's/^/@/' | paste -sd ' ' -) since it was last reset, so the ticked boxes can't all be yours. The boxes are cleared: tick your answers again, then Submit. This did not count as an attempt."
+    fi
     given_id="$(jq -r .id <<<"$form")"
     selected="$(jq -c --argjson n "$1" '.ticks as $t | [range(1; $n + 1) as $i | [$t[] | select(startswith("q\($i):")) | .[3:]] | unique | join("")]' <<<"$form")"
   else
@@ -308,25 +326,25 @@ cmd_answer() {
 
   if ! jq -e --arg l "$ACTOR" 'index($l)' <<<"$reviewers" >/dev/null; then
     if [[ "${ALLOW_AUTHOR:-}" == "true" ]]; then who="its requested reviewers and, if a repository admin, its author"; else who="its requested reviewers (not the PR author)"; fi
-    refuse "⚠️ @$ACTOR, only $who can answer the quiz on PR #$PR, never bots or agents. Ask the author to request your review, then answer again. This did not count as an attempt." '[]'
+    refuse "⚠️ @$ACTOR, only $who can answer the quiz on PR #$PR, never bots or agents. Ask the author to request your review, then answer again. This did not count as an attempt."
   fi
   if jq -e '.results | any(.passed)' <<<"$state" >/dev/null; then
-    if [[ -n "$COMMENT_ID" ]]; then write_form "$tmp/public.json" "$state" "✅ This quiz has already been passed." '[]'; fi
+    if [[ -n "$COMMENT_ID" ]]; then write_form "$tmp/public.json" "$state" "✅ This quiz has already been passed."; fi
     note "✅ The quiz on PR #$PR has already been passed."; return 0
   fi
   if [[ "$given_id" != "$id" ]]; then
-    refuse "⚠️ @$ACTOR, those answers are for another version of the quiz on PR #$PR: it was replaced or the quiz ID was mistyped. Re-read the summary and the questions shown now, then answer again. This did not count as an attempt." '[]'
+    refuse "⚠️ @$ACTOR, those answers are for another version of the quiz on PR #$PR: it was replaced or the quiz ID was mistyped. Re-read the summary and the questions shown now, then answer again. This did not count as an attempt."
   fi
   attempts="$(jq --arg l "$ACTOR" '[.results[] | select(.by == $l)] | length' <<<"$state")"
   if (( attempts >= MAX_ATTEMPTS )); then
-    refuse "⛔ @$ACTOR, you have no attempts left for this quiz. Re-read the summary and ask the author to publish a new quiz." '[]'
+    refuse "⛔ @$ACTOR, you have no attempts left for this quiz. Re-read the summary and ask the author to publish a new quiz."
   fi
   bad="$(jq -r 'to_entries | map(select((.value | length) != 1) | "Q\(.key + 1)") | join(", ")' <<<"$selected")"
   if [[ -n "$bad" ]]; then
     if [[ -n "$COMMENT_ID" ]]; then
-      refuse "⚠️ @$ACTOR, tick exactly one box for each question ($bad), then tick Submit again. This did not count as an attempt." "$selected"
+      refuse "⚠️ @$ACTOR, tick exactly one box for each question (not the case for $bad), then tick Submit. The boxes are cleared. This did not count as an attempt."
     fi
-    refuse "⚠️ This quiz has $n questions: choose an answer for Q1 to Q$n and leave the other questions at \`-\`. This did not count as an attempt." '[]'
+    refuse "⚠️ This quiz has $n questions: choose an answer for Q1 to Q$n and leave the other questions at \`-\`. This did not count as an attempt."
   fi
   given="$(jq -r 'join("")' <<<"$selected")"
 
@@ -344,13 +362,13 @@ cmd_answer() {
   update_check "$tmp/public.json" "$state" "$payload"
   echo "PR #$PR quiz $(jq -r .quiz <<<"$state") at $head: reviewers=$reviewers results=$(jq -c .results <<<"$state")"
   if [[ "$passed" == "true" ]]; then
-    write_form "$tmp/public.json" "$state" "✅ @$ACTOR passed the quiz. The \`$CHECK_NAME\` check is green." '[]'
+    write_form "$tmp/public.json" "$state" "✅ @$ACTOR passed the quiz. The \`$CHECK_NAME\` check is green."
     note "✅ @$ACTOR passed the quiz on PR #$PR ($(jq -r .score <<<"$result")%). The \`$CHECK_NAME\` check is green."
   else
     # Only pass/fail is reported, and the boxes are cleared: a per-attempt score or per-question result would tell the
     # reviewer which guesses were right.
     result="❌ @$ACTOR, not passed. The pass mark is ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts - 1)). Re-read the summary and try again."
-    write_form "$tmp/public.json" "$state" "$result" '[]'
+    write_form "$tmp/public.json" "$state" "$result"
     COMMENT_ID=""
     stop "$result"
   fi
