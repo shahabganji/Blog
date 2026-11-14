@@ -1,4 +1,5 @@
-# Renders the quiz comment on the PR: the summary, then each question as checkboxes and a Submit box.
+# Renders the quiz comment on the PR: the summary, then each question as checkboxes and a Submit box (GitHub comments can't
+# hold buttons or forms; a task-list checkbox is the only control, so Submit is a box set apart under its own heading).
 # Ticking a box edits the comment, which triggers pr-quiz-comment.yml (issue_comment: edited); quiz.sh reads the ticked boxes from the
 # hidden markers at the end of each line. The comment never contains the answers.
 # Input: the public quiz spec plus .form = {open: bool, notice: Markdown, answers: correct letters or ""}. Every box is
@@ -21,8 +22,8 @@ include "summary";
         elif ($f.answers // "")[$i:$i + 1] == $l then "- ✅ **\($l)) \(.value | oneline)**"
         else "- \($l)) \(.value | oneline)" end) | join("\n"))
   ] | join("\n\n"))
-+ (if $f.open then "\n\n- [ ] **Submit my answers** <!-- pr-quiz:submit -->\n\n"
++ (if $f.open then "\n\n---\n\n#### 📨 Done? Tick the box below to submit\n\n- [ ] **Submit my answers** <!-- pr-quiz:submit -->\n\n"
      + "<sub>Tick one box per question, then tick **Submit my answers**; the result appears here a few seconds later. "
-     + who_can_answer + "Each gets \(.max_attempts) attempts; the `pr-quiz` check passes at \(.pass_mark)%.</sub>\n"
+     + who_can_answer + "Each gets \(.max_attempts) attempts; the `pr-quiz` check passes at \(.pass_mark)% or higher.</sub>\n"
    else "\n" end)
 + "\n<sub>Quiz `\(.quiz_id)` for commit \(.head_sha[0:8]). A new push makes it stale until a new quiz is published.</sub>\n"

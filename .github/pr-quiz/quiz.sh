@@ -387,7 +387,7 @@ cmd_answer() {
   else
     # Only pass/fail is reported, and the boxes are cleared: a per-attempt score or per-question result would tell the
     # reviewer which guesses were right.
-    result="❌ @$ACTOR, not passed. The pass mark is ${PASS_MARK}%. Attempts left: $((MAX_ATTEMPTS - attempts - 1)). Re-read the summary and try again."
+    result="❌ @$ACTOR, not passed. You need ${PASS_MARK}% or more. Attempts left: $((MAX_ATTEMPTS - attempts - 1)). Re-read the summary and try again."
     write_form "$tmp/public.json" "$state" "$result"
     COMMENT_ID=""
     stop "$result"
