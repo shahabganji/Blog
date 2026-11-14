@@ -36,7 +36,7 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ~/.nuget/packages
-        key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj', 'global.json') }}
+        key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/Directory.Build.props', '**/*.csproj', 'global.json') }}
         restore-keys: nuget-${{ runner.os }}-
     - name: Restore dependencies
       run: dotnet restore
