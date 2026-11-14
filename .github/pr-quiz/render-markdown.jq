@@ -25,6 +25,6 @@ def answer_url: .pr_url | sub("/pull/[0-9]+$"; "/actions/workflows/pr-quiz.yml")
 + "\n\n---\n"
 + "**How to answer:** open [PR quiz: answer](\(answer_url)), click **Run workflow**, enter PR `\(.pr)` and quiz ID `\(.quiz_id)`, "
 + "choose one letter for each of Q1 to Q\(.questions | length) (leave the other questions at `-`) and run it. "
-+ "The run tells you whether you passed. " + (if .allow_author then "Only reviewers requested on this PR and the PR author can answer (not bots). " else "Only reviewers requested on this PR can answer (not the author or bots). " end)
++ "The run tells you whether you passed. " + (if .allow_author then "Only reviewers requested on this PR, and the PR author if a repository admin, can answer (not bots). " else "Only reviewers requested on this PR can answer (not the author or bots). " end)
 + "Each reviewer gets \(.max_attempts) attempts. The `pr-quiz` check passes at \(.pass_mark)% or higher.\n\n"
 + "_Summary for commit \(.head_sha[0:8]). A new push makes it stale until a new quiz is published._\n"

@@ -126,7 +126,7 @@ marker_value() { # $1 check JSON, $2 marker -> the value of the last "<marker>va
 }
 
 load_pr() { # sets pr_json, head, reviewers; refuses closed PRs and head commits shared with another open PR
-  local others
+  local others author
   [[ "$PR" =~ ^[0-9]+$ ]] || stop "❌ \`$PR\` is not a pull request number."
   pr_json="$(gh api "repos/$REPO/pulls/$PR")"
   [[ "$(jq -r .state <<<"$pr_json")" == "open" ]] || stop "❌ PR #$PR is not open."
@@ -141,9 +141,13 @@ load_pr() { # sets pr_json, head, reviewers; refuses closed PRs and head commits
     | jq -sc --arg author "$(jq -r .user.login <<<"$pr_json")" --argjson trusted "$TRUSTED" \
         '[.[] | select(.type == "User" and .login != $author and (.association as $a | $trusted | index($a))) | .login] | unique')"
   # Solo mode (repository variable PR_QUIZ_ALLOW_AUTHOR=true): a single maintainer can't be requested as a reviewer on PRs
-  # opened with their own account (for example by an agent), so the author may answer too. Never a bot author.
+  # opened with their own account (for example by an agent), so the author may answer too. Anyone with write access can
+  # set the variable, so the author must also be a repository admin (who could bypass the gate anyway). Never a bot.
   if [[ "${ALLOW_AUTHOR:-}" == "true" && "$(jq -r .user.type <<<"$pr_json")" == "User" ]]; then
-    reviewers="$(jq -c --arg a "$(jq -r .user.login <<<"$pr_json")" '. + [$a] | unique' <<<"$reviewers")"
+    author="$(jq -r .user.login <<<"$pr_json")"
+    if [[ "$(gh api "repos/$REPO/collaborators/$author/permission" --jq .permission 2>/dev/null || true)" == "admin" ]]; then
+      reviewers="$(jq -c --arg a "$author" '. + [$a] | unique' <<<"$reviewers")"
+    fi
   fi
   # The check belongs to the commit, not the PR, so another open PR with the same head would share (and overwrite) it.
   others="$(gh api "repos/$REPO/commits/$head/pulls" \
@@ -236,7 +240,7 @@ cmd_answer() {
   n="$(jq '.questions | length' "$tmp/payload.json")"
 
   if ! jq -e --arg l "$ACTOR" 'index($l)' <<<"$reviewers" >/dev/null; then
-    if [[ "${ALLOW_AUTHOR:-}" == "true" ]]; then who="its requested reviewers and its author"; else who="its requested reviewers (not the PR author)"; fi
+    if [[ "${ALLOW_AUTHOR:-}" == "true" ]]; then who="its requested reviewers and, if a repository admin, its author"; else who="its requested reviewers (not the PR author)"; fi
     stop "⚠️ @$ACTOR, only $who can answer the quiz on PR #$PR, never bots or agents. Ask the author to request your review, then answer again. This did not count as an attempt."
   fi
   if jq -e '.results | any(.passed)' <<<"$state" >/dev/null; then

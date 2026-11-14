@@ -83,5 +83,5 @@ fi
 
 if $SOLO; then
   gh variable set PR_QUIZ_ALLOW_AUTHOR --repo "$REPO" --body true
-  echo "Solo mode: the PR author can answer the quiz too. Undo with: gh variable delete PR_QUIZ_ALLOW_AUTHOR --repo $REPO"
+  echo "Solo mode: a PR author who is a repository admin can answer the quiz too. Undo with: gh variable delete PR_QUIZ_ALLOW_AUTHOR --repo $REPO"
 fi
