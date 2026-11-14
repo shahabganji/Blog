@@ -289,7 +289,9 @@ read_answers() { # $1 question count -> sets given_id (quiz ID) and selected (JS
     # Runs can wait in the per-PR queue: grade only if the comment is still exactly what this edit made it. Otherwise a later
     # edit or rewrite has happened (the history below would describe the comment now, not this body), and any later edit
     # with Submit ticked has its own run. Nothing is rewritten, so ticks being made now are kept.
-    current="$(gh api "repos/$REPO/issues/comments/$COMMENT_ID" --jq '.body')" || current=""
+    if ! current="$(gh api "repos/$REPO/issues/comments/$COMMENT_ID" --jq '.body')"; then
+      refuse "⚠️ @$ACTOR, the quiz comment couldn't be read, so the answers weren't graded and the boxes are cleared. Tick your answers again, then Submit (or use the Actions form). This did not count as an attempt."
+    fi
     if [[ "$(tr -d '\r' <<<"$current")" != "$(jq -r '.comment.body // "" | gsub("\r"; "")' "$ev")" ]]; then
       COMMENT_ID=""; note "The quiz comment changed after this edit, so this run doesn't grade it; a later submit is graded by its own run."; exit 0
     fi
