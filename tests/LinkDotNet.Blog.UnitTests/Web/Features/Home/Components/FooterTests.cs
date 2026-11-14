@@ -23,7 +23,7 @@ public class FooterTests : BunitContext
             .WithIsAboutMeEnabled(true)
             .Build());
         Services.AddScoped(_ => appConfig);
-        
+
         var cut = Render<Footer>();
 
         cut.Find("span").TextContent.ShouldContain("Steven");

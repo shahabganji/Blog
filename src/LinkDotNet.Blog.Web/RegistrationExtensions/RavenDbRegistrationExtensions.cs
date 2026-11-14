@@ -1,4 +1,4 @@
-﻿using LinkDotNet.Blog.Infrastructure.Persistence;
+using LinkDotNet.Blog.Infrastructure.Persistence;
 using LinkDotNet.Blog.Infrastructure.Persistence.RavenDb;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

@@ -43,7 +43,7 @@ public class BlogPostTests
     }
 
     [Theory]
-    [InlineData("blog title","blog-title")]
+    [InlineData("blog title", "blog-title")]
     [InlineData("blog      title", "blog-title")]
     [InlineData("blog +title", "blog-title")]
     [InlineData("blog/title", "blogtitle")]

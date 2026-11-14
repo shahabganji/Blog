@@ -332,7 +332,7 @@ public class CreateNewBlogPostTests : BunitContext
         element.ShouldNotBeNull();
         element.IsChecked.ShouldBeFalse();
     }
-    
+
     [Fact]
     public void GivenBlogPost_WhenCacheInvalidatedOptionIsSet_CacheIsInvalidated()
     {
@@ -514,7 +514,7 @@ public class CreateNewBlogPostTests : BunitContext
         var dialog = cut.FindComponent<AddTemplateDialog>();
         // Type the name to filter and show the delete button
         dialog.Find("input").Input("My Template");
-        
+
         dialog.WaitForState(() => dialog.FindAll("button.fg-danger").Count > 0);
         var deleteButton = dialog.FindAll("button.fg-danger").First();
         deleteButton.MouseDown();

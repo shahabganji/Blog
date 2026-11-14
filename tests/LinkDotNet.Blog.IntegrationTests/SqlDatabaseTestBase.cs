@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Data.Common;
 using System.Threading.Tasks;
 using LinkDotNet.Blog.Domain;
@@ -33,7 +33,7 @@ public abstract class SqlDatabaseTestBase<TEntity> : IAsyncDisposable
     protected BlogDbContext DbContext { get; }
 
     protected IDbContextFactory<BlogDbContext> DbContextFactory { get; }
-    
+
     public async ValueTask DisposeAsync()
     {
         GC.SuppressFinalize(this);

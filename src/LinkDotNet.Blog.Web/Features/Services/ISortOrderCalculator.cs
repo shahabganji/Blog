@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using LinkDotNet.Blog.Domain;
 
 namespace LinkDotNet.Blog.Web.Features.Services;

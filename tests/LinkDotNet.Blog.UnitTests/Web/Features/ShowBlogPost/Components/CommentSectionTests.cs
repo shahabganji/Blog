@@ -11,7 +11,7 @@ public class CommentSectionTests : BunitContext
     public void ShouldShowDisqusWhenConfigured()
     {
         Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().WithIsDisqusEnabled(true).Build()));
-        Services.AddScoped(_ => Options.Create(new DisqusConfigurationBuilder().Build() ));
+        Services.AddScoped(_ => Options.Create(new DisqusConfigurationBuilder().Build()));
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         var cut = Render<CommentSection>();
@@ -23,7 +23,7 @@ public class CommentSectionTests : BunitContext
     public void ShouldShowGiscusWhenConfigured()
     {
         Services.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder().WithIsGiscusEnabled(true).Build()));
-        Services.AddScoped(_ => Options.Create(new GiscusConfigurationBuilder().Build() ));
+        Services.AddScoped(_ => Options.Create(new GiscusConfigurationBuilder().Build()));
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         var cut = Render<CommentSection>();
@@ -38,8 +38,8 @@ public class CommentSectionTests : BunitContext
             .WithIsGiscusEnabled(true)
             .WithIsDisqusEnabled(true)
             .Build()));
-        Services.AddScoped(_ => Options.Create( new DisqusConfigurationBuilder().Build()));
-        Services.AddScoped(_ => Options.Create( new GiscusConfigurationBuilder().Build()));
+        Services.AddScoped(_ => Options.Create(new DisqusConfigurationBuilder().Build()));
+        Services.AddScoped(_ => Options.Create(new GiscusConfigurationBuilder().Build()));
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         var cut = Render<CommentSection>();

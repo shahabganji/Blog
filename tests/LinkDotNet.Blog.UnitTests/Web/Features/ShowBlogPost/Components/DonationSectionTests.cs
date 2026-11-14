@@ -33,7 +33,7 @@ public class DonationSectionTests : BunitContext
         var appConfig = new SupportMeConfigurationBuilder()
             .WithGithubSponsorName(account)
             .Build();
-        Services.AddScoped(_ =>Options.Create(appConfig));
+        Services.AddScoped(_ => Options.Create(appConfig));
 
         var cut = Render<DonationSection>();
 

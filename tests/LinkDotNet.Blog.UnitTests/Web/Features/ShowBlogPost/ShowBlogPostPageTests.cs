@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using AngleSharp.Html.Dom;
 using Blazored.Toast.Services;
 using LinkDotNet.Blog.Domain;
@@ -40,7 +40,7 @@ public class ShowBlogPostPageTests : BunitContext
         ComponentFactories.Add<Like, LikeStub>();
         ComponentFactories.AddStub<CommentSection>();
     }
-    
+
     [Fact]
     public void ShouldShowLoadingAnimation()
     {
@@ -48,7 +48,7 @@ public class ShowBlogPostPageTests : BunitContext
         var repositoryMock = Substitute.For<IRepository<BlogPost>>();
         Services.AddScoped(_ => repositoryMock);
         repositoryMock.GetByIdAsync(blogPostId)!
-            .Returns(new ValueTask<BlogPost>(Task.Run(async () => 
+            .Returns(new ValueTask<BlogPost>(Task.Run(async () =>
             {
                 await Task.Delay(250, cancellationToken: TestContext.Current.CancellationToken);
                 return new BlogPostBuilder().Build();
@@ -175,10 +175,10 @@ public class ShowBlogPostPageTests : BunitContext
         blogPost.Id = "1";
         repositoryMock.GetByIdAsync("1").Returns(blogPost);
         Services.AddScoped(_ => repositoryMock);
-        
+
         var cut = Render<ShowBlogPostPage>(
             p => p.Add(s => s.BlogPostId, "1"));
-        
+
         cut.FindComponent<OgData>().Instance.CanonicalRelativeUrl.ShouldBe("blogPost/1/sample");
     }
 
@@ -262,7 +262,7 @@ public class ShowBlogPostPageTests : BunitContext
         [Parameter]
         public RenderFragment? ChildContent { get; set; } = default!;
     }
-    
+
     private class LikeStub : ComponentBase
     {
         [Parameter]
@@ -271,7 +271,7 @@ public class ShowBlogPostPageTests : BunitContext
         [Parameter]
         public EventCallback<bool> OnBlogPostLiked { get; set; } = default!;
     }
-    
+
     private class SimilarBlogPostSectionStub : ComponentBase
     {
         [Parameter]

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.TestUtilities;
@@ -69,7 +69,7 @@ public class SearchByTagTests : SqlDatabaseTestBase<BlogPost>
         ctx.Services.AddScoped(_ => Repository);
         ctx.Services.AddScoped(_ => Substitute.For<IBookmarkService>());
     }
-    
+
     private class PageTitleStub : ComponentBase
     {
         [Parameter]

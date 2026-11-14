@@ -21,15 +21,15 @@ public sealed class ShortCodesPageTests : SqlDatabaseTestBase<ShortCode>
         var cut = ctx.Render<ShortCodesPage>();
         cut.Find("#short-code-content").Input("# Text");
         cut.Find("#short-code-name").Change("ShortName");
-        
+
         await cut.Find("form").SubmitAsync();
-        
+
         var shortCodes = await Repository.GetAllAsync();
         shortCodes.ShouldHaveSingleItem();
         shortCodes.First().MarkdownContent.ShouldBe("# Text");
         shortCodes.First().Name.ShouldBe("ShortName");
     }
-    
+
     [Fact]
     public async Task ShouldUpdateShortCode()
     {
@@ -43,9 +43,9 @@ public sealed class ShortCodesPageTests : SqlDatabaseTestBase<ShortCode>
         await cut.Find("#edit-shortcode").ClickAsync();
         cut.Find("#short-code-content").Input("# New Text");
         cut.Find("#short-code-name").Change("ShortName");
-        
+
         await cut.Find("form").SubmitAsync();
-        
+
         var shortCodes = await Repository.GetAllAsync();
         shortCodes.ShouldHaveSingleItem();
         shortCodes.First().MarkdownContent.ShouldBe("# New Text");

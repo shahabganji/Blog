@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using LinkDotNet.Blog.Domain;
 
 namespace LinkDotNet.Blog.Web.Features.AboutMe.Components.Skill;

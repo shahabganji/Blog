@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using AngleSharp.Html.Dom;
@@ -77,11 +77,11 @@ public class VisitCountPerPageTests : SqlDatabaseTestBase<BlogPost>
         var blogPost = new BlogPostBuilder().WithTitle("1").WithUpdatedDate(new DateTime(2020, 1, 1)).Build();
         await Repository.StoreAsync(blogPost);
         var before = new BlogPostRecord
-            { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2019, 12, 31), Clicks = 7 };
+        { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2019, 12, 31), Clicks = 7 };
         var onStart = new BlogPostRecord
-            { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2020, 1, 1), Clicks = 3 };
+        { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2020, 1, 1), Clicks = 3 };
         var after = new BlogPostRecord
-            { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2021, 1, 1), Clicks = 4 };
+        { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2021, 1, 1), Clicks = 4 };
         await DbContext.BlogPostRecords.AddRangeAsync(before, onStart, after);
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         await using var ctx = new BunitContext();
@@ -102,11 +102,11 @@ public class VisitCountPerPageTests : SqlDatabaseTestBase<BlogPost>
         var blogPost = new BlogPostBuilder().WithTitle("1").WithUpdatedDate(new DateTime(2020, 1, 1, 14, 0, 0)).Build();
         await Repository.StoreAsync(blogPost);
         var before = new BlogPostRecord
-            { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2019, 12, 31), Clicks = 7 };
+        { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2019, 12, 31), Clicks = 7 };
         var onEnd = new BlogPostRecord
-            { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2020, 1, 1), Clicks = 3 };
+        { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2020, 1, 1), Clicks = 3 };
         var after = new BlogPostRecord
-            { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2021, 1, 1), Clicks = 4 };
+        { BlogPostId = blogPost.Id, DateClicked = new DateOnly(2021, 1, 1), Clicks = 4 };
         await DbContext.BlogPostRecords.AddRangeAsync(before, onEnd, after);
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         await using var ctx = new BunitContext();
@@ -129,11 +129,11 @@ public class VisitCountPerPageTests : SqlDatabaseTestBase<BlogPost>
         await Repository.StoreAsync(blogPost1);
         await Repository.StoreAsync(blogPost2);
         var clicked1 = new BlogPostRecord
-            { BlogPostId = blogPost1.Id, DateClicked = new DateOnly(2020, 1, 1), Clicks = 2 };
+        { BlogPostId = blogPost1.Id, DateClicked = new DateOnly(2020, 1, 1), Clicks = 2 };
         var clicked2 = new BlogPostRecord
-            { BlogPostId = blogPost1.Id, DateClicked = DateOnly.MinValue, Clicks = 1 };
+        { BlogPostId = blogPost1.Id, DateClicked = DateOnly.MinValue, Clicks = 1 };
         var clicked3 = new BlogPostRecord
-            { BlogPostId = blogPost2.Id, DateClicked = DateOnly.MinValue, Clicks = 1 };
+        { BlogPostId = blogPost2.Id, DateClicked = DateOnly.MinValue, Clicks = 1 };
         await DbContext.BlogPostRecords.AddRangeAsync(clicked1, clicked2, clicked3);
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         await using var ctx = new BunitContext();
@@ -151,11 +151,11 @@ public class VisitCountPerPageTests : SqlDatabaseTestBase<BlogPost>
         var blogPost1 = new BlogPostBuilder().WithTitle("1").WithLikes(2).Build();
         await Repository.StoreAsync(blogPost1);
         var clicked1 = new BlogPostRecord
-            { BlogPostId = blogPost1.Id, DateClicked = new DateOnly(2020, 1, 1), Clicks = 2 };
+        { BlogPostId = blogPost1.Id, DateClicked = new DateOnly(2020, 1, 1), Clicks = 2 };
         var clicked2 = new BlogPostRecord
-            { BlogPostId = blogPost1.Id, DateClicked = DateOnly.MinValue, Clicks = 1 };
+        { BlogPostId = blogPost1.Id, DateClicked = DateOnly.MinValue, Clicks = 1 };
         var clicked3 = new BlogPostRecord
-            { BlogPostId = Guid.NewGuid().ToString(), DateClicked = DateOnly.MinValue, Clicks = 1 };
+        { BlogPostId = Guid.NewGuid().ToString(), DateClicked = DateOnly.MinValue, Clicks = 1 };
         await DbContext.BlogPostRecords.AddRangeAsync(clicked1, clicked2, clicked3);
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         await using var ctx = new BunitContext();
@@ -187,7 +187,7 @@ public class VisitCountPerPageTests : SqlDatabaseTestBase<BlogPost>
 
         await DbContext.SaveChangesAsync();
     }
-    
+
     private class DateRangeSelectorStub : ComponentBase
     {
         [Parameter]

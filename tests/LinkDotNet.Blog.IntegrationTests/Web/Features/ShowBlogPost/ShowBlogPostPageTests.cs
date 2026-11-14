@@ -133,10 +133,10 @@ public class ShowBlogPostPageTests : SqlDatabaseTestBase<BlogPost>
         ctx.Services.AddScoped(_ => shortCodesRepository);
         var blogPost = new BlogPostBuilder().WithContent("This is a [[ONE]] shortcode").IsPublished().Build();
         await Repository.StoreAsync(blogPost);
-        
+
         var cut = ctx.Render<ShowBlogPostPage>(
             p => p.Add(b => b.BlogPostId, blogPost.Id));
-        
+
         cut.Find(".blogpost-content > p").TextContent.ShouldBe("This is a Content shortcode");
     }
 

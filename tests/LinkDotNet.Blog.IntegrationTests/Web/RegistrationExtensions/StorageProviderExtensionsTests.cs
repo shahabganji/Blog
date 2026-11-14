@@ -51,7 +51,7 @@ public class StorageProviderExtensionsTests
         collection.AddScoped(_ => Options.Create(new ApplicationConfigurationBuilder()
             .WithConnectionString("Filename=:memory:")
             .Build()));
-        
+
         collection.AddLogging();
 
         collection.AddStorageProvider(config);

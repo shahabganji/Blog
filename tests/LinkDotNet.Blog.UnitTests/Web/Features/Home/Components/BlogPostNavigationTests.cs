@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using AngleSharp.Html.Dom;
 using LinkDotNet.Blog.Domain;
 using LinkDotNet.Blog.Infrastructure;

@@ -1,4 +1,4 @@
-﻿namespace LinkDotNet.Blog.Web.Features.ShowBlogPost.Components;
+namespace LinkDotNet.Blog.Web.Features.ShowBlogPost.Components;
 
 public sealed record GiscusConfiguration
 {

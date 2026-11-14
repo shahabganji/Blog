@@ -1,13 +1,14 @@
 name: dotnet
 
+# Pull requests (from any branch) are checked on their pull_request event. Pushes are only checked on long-lived branches;
+# checking every branch push too would run everything twice for each push to a PR branch.
 on:
   push:
-    branches: [ master ]
+    branches: [ shahab, master ]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
   pull_request:
-    branches: [ master ]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -17,13 +18,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # One job, so .NET is installed and packages restored once for format, build and test. Steps run in order and stop at
+  # the first failure, so the build only runs once the formatting check has passed.
   build:
-
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm, macos-latest ]
+    # Same OS and architecture as the App Service the blog runs on (Linux, x64).
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v7
@@ -33,8 +32,24 @@ jobs:
         dotnet-quality: preview
         dotnet-version: |
           11.0.x
+    - name: Cache NuGet packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/Directory.Build.props', '**/*.csproj', 'global.json') }}
+        restore-keys: nuget-${{ runner.os }}-
     - name: Restore dependencies
       run: dotnet restore
+    # Analyzer rules are enforced by the Release build (warnings are errors there), so only whitespace and style are checked here.
+    - name: Check formatting
+      run: |
+        status=0
+        dotnet format whitespace --verify-no-changes || status=1
+        dotnet format style --verify-no-changes --no-restore || status=1
+        if [ "$status" -ne 0 ]; then
+          echo "::error::Formatting is off. Run 'dotnet format whitespace && dotnet format style' and commit the result."
+        fi
+        exit "$status"
     - name: Build
       run: dotnet build --no-restore -c Release
     - name: Test

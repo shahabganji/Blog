@@ -14,10 +14,10 @@ public static class RepositoryTestExtensions
     {
         var repositoryMock = Substitute.For<IRepository<TEntity>>();
         repositoryMock.GetAllAsync(
-                Arg.Any<Expression<Func<TEntity, bool>>>(), 
-                Arg.Any<Expression<Func<TEntity, object>>>(), 
-                Arg.Any<bool>(), 
-                Arg.Any<int>(), 
+                Arg.Any<Expression<Func<TEntity, bool>>>(),
+                Arg.Any<Expression<Func<TEntity, object>>>(),
+                Arg.Any<bool>(),
+                Arg.Any<int>(),
                 Arg.Any<int>())
             .Returns(new PagedList<TEntity>([], 0, 1, 1));
 

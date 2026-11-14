@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using AngleSharp.Html.Dom;
 using LinkDotNet.Blog.Web.Features.ShowBlogPost.Components;
@@ -32,7 +32,7 @@ public class ShareBlogPostTests : BunitContext
         var linkedInShare = (IHtmlAnchorElement)cut.Find("#share-linkedin");
         linkedInShare.Href.ShouldBe("https://www.linkedin.com/shareArticle?mini=true&url=http://localhost/blogPost/1");
     }
-    
+
     [Fact]
     public void ShouldShareToX()
     {
@@ -48,9 +48,9 @@ public class ShareBlogPostTests : BunitContext
     public void ShouldShareToBluesky()
     {
         Services.GetRequiredService<BunitNavigationManager>().NavigateTo("blogPost/1");
-        
+
         var cut = Render<ShareBlogPost>();
-        
+
         var blueskyShare = (IHtmlAnchorElement)cut.Find("#share-bluesky");
         blueskyShare.Href.ShouldBe("https://bsky.app/intent/compose?text=http://localhost/blogPost/1");
     }
