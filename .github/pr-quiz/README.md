@@ -26,7 +26,7 @@ Actions ▸ "PR quiz: answer" ▸ Run workflow
 2. Open **Actions → PR quiz: answer → Run workflow** (the check links to it). Enter the PR number and the **quiz ID** shown on the check, and pick a letter for each question. Leave the questions the quiz doesn't have at `-`.
 3. Run it. The run's summary says whether you passed, and the `pr-quiz` check on the PR updates. A run that didn't pass, or was refused, shows as failed, with the reason in its summary.
 
-Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers* list, including those who have already submitted a review (only if they are collaborators, since anyone can review a public PR). GitHub records who started the run, so nobody can answer for someone else. Runs by the PR author, bots or apps (Copilot included) are refused and don't use an attempt. The author requests a reviewer from the PR sidebar. Running a workflow needs write access, which requested reviewers have.
+Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers* list, including those who have already submitted a review (only if they are collaborators, since anyone can review a public PR). GitHub records who started the run, so nobody can answer for someone else. Runs by the PR author (unless solo mode is on, see the trust model), bots or apps (Copilot included) are refused and don't use an attempt. The author requests a reviewer from the PR sidebar. Running a workflow needs write access, which requested reviewers have.
 
 ### Details
 
@@ -60,6 +60,7 @@ Only **reviewers requested on the PR** can answer: users in the PR's *Reviewers*
 ```bash
 .github/pr-quiz/setup.sh              # pr-quiz environment (deploy branch only) + keypair + PR_QUIZ_PRIVATE_KEY secret
 .github/pr-quiz/setup.sh --activate   # also: default branch -> shahab, ruleset "shahab: PR quiz" requiring the pr-quiz check
+.github/pr-quiz/setup.sh --solo       # also: the PR author may answer (repository variable PR_QUIZ_ALLOW_AUTHOR=true)
 .github/pr-quiz/setup.sh --rotate     # new keypair; commit the new public.pem (quizzes already posted can no longer be graded)
 ```
 
@@ -83,7 +84,7 @@ This is a **comprehension gate, not a security control**.
 
 - The public key is public, so anyone who can run the publish workflow (write access) can publish a quiz with answers they know.
 - Only requested reviewers who are users (not bots) and not the PR author can answer. GitHub can't tell whether a *person's* token is being used by an agent. If a reviewer lets an agent run workflows as them, the agent could answer. Agents that work with the author's token are excluded as the author.
-- In a single-maintainer repository, the maintainer can't pass the quiz on their own PRs, because GitHub doesn't allow requesting a review from the PR author. Either request a review from another collaborator, or merge with the admin bypass. PRs opened by the Copilot coding agent are authored by a bot, so the maintainer can be their reviewer.
+- In a single-maintainer repository, the maintainer can't be requested as a reviewer on their own PRs (GitHub doesn't allow requesting a review from the PR author), and agents working locally open PRs with the maintainer's account. **Solo mode** (`setup.sh --solo`, i.e. the repository variable `PR_QUIZ_ALLOW_AUTHOR=true`) lets the PR author answer as well, if the author is a user and not a bot. It is off by default. It adds no new hole when the agent already uses the maintainer's token, but in a team it would let authors pass their own quiz, so leave it off there. Only admins can change repository variables. Without solo mode: request a review from another collaborator, or merge with the admin bypass. PRs opened by the Copilot coding agent are authored by a bot, so the maintainer can be their reviewer.
 - Any workflow in this repository that has `checks: write` could create a check named `pr-quiz` (they all share the GitHub Actions app id that the ruleset matches).
 - The answers a reviewer picks are not shown in the run's log or summary. Each new quiz has new questions.
 - Repository admins can bypass the ruleset.

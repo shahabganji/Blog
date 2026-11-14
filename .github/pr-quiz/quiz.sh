@@ -52,9 +52,11 @@ cmd_validate() {
 quiz_id() { printf '%s' "$1" | openssl dgst -sha256 -r | cut -c1-6; } # $1 ciphertext
 
 public_spec() { # $1 spec file, $2 pr, $3 sha, $4 url, $5 quiz id -> public spec (answers removed, server-side constants applied)
-  jq -c --argjson pr "$2" --arg sha "$3" --arg url "$4" --arg id "$5" --argjson pass "$PASS_MARK" --argjson attempts "$MAX_ATTEMPTS" '
+  jq -c --argjson pr "$2" --arg sha "$3" --arg url "$4" --arg id "$5" --argjson pass "$PASS_MARK" --argjson attempts "$MAX_ATTEMPTS" \
+    --argjson allow_author "$([[ "${ALLOW_AUTHOR:-}" == "true" ]] && echo true || echo false)" '
     del(.ciphertext) | .questions |= map({question, options})
-    | . + {version: 1, pr: $pr, pr_url: $url, head_sha: $sha, quiz_id: $id, pass_mark: $pass, max_attempts: $attempts}' "$1"
+    | . + {version: 1, pr: $pr, pr_url: $url, head_sha: $sha, quiz_id: $id, pass_mark: $pass, max_attempts: $attempts,
+           allow_author: $allow_author}' "$1"
 }
 
 cmd_build() {
@@ -138,6 +140,11 @@ load_pr() { # sets pr_json, head, reviewers; refuses closed PRs and head commits
                    --jq '.[] | {login: .user.login, type: .user.type, association: .author_association}'; } \
     | jq -sc --arg author "$(jq -r .user.login <<<"$pr_json")" --argjson trusted "$TRUSTED" \
         '[.[] | select(.type == "User" and .login != $author and (.association as $a | $trusted | index($a))) | .login] | unique')"
+  # Solo mode (repository variable PR_QUIZ_ALLOW_AUTHOR=true): a single maintainer can't be requested as a reviewer on PRs
+  # opened with their own account (for example by an agent), so the author may answer too. Never a bot author.
+  if [[ "${ALLOW_AUTHOR:-}" == "true" && "$(jq -r .user.type <<<"$pr_json")" == "User" ]]; then
+    reviewers="$(jq -c --arg a "$(jq -r .user.login <<<"$pr_json")" '. + [$a] | unique' <<<"$reviewers")"
+  fi
   # The check belongs to the commit, not the PR, so another open PR with the same head would share (and overwrite) it.
   others="$(gh api "repos/$REPO/commits/$head/pulls" \
     --jq "[.[] | select(.state == \"open\" and .head.sha == \"$head\" and .number != $PR) | \"#\\(.number)\"] | join(\", \")")"
@@ -211,7 +218,7 @@ cmd_publish() {
 }
 
 cmd_answer() {
-  local check payload state errors id n given result attempts passed
+  local check payload state errors id n given result attempts passed who
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   load_pr
@@ -229,7 +236,8 @@ cmd_answer() {
   n="$(jq '.questions | length' "$tmp/payload.json")"
 
   if ! jq -e --arg l "$ACTOR" 'index($l)' <<<"$reviewers" >/dev/null; then
-    stop "⚠️ @$ACTOR, only reviewers requested on PR #$PR can answer its quiz (not the PR author, bots or agents). Ask the author to request your review, then answer again. This did not count as an attempt."
+    if [[ "${ALLOW_AUTHOR:-}" == "true" ]]; then who="its requested reviewers and its author"; else who="its requested reviewers (not the PR author)"; fi
+    stop "⚠️ @$ACTOR, only $who can answer the quiz on PR #$PR, never bots or agents. Ask the author to request your review, then answer again. This did not count as an attempt."
   fi
   if jq -e '.results | any(.passed)' <<<"$state" >/dev/null; then
     note "✅ The quiz on PR #$PR has already been passed."; return 0

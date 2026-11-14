@@ -47,6 +47,7 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ inputs.pr }}
           QUIZ: ${{ inputs.quiz }}
+          ALLOW_AUTHOR: ${{ vars.PR_QUIZ_ALLOW_AUTHOR }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OUT_DIR: out
           PR_QUIZ_PRIVATE_KEY: ${{ secrets.PR_QUIZ_PRIVATE_KEY }}
