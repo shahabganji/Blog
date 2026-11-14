@@ -20,10 +20,10 @@ public sealed class MarkdownFake : ComponentBase
 
     [Parameter]
     public int Rows { get; set; }
-    
+
     [Parameter]
     public string Placeholder { get; set; } = string.Empty;
-    
+
     [Parameter]
     public Func<string, Task<string>> PreviewFunction { get; set; } = _ => Task.FromResult(string.Empty);
 

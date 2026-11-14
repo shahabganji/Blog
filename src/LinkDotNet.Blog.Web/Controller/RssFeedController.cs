@@ -78,7 +78,10 @@ public sealed class RssFeedController : ControllerBase
     {
         var settings = new XmlWriterSettings
         {
-            Encoding = Encoding.UTF8, NewLineHandling = NewLineHandling.Entitize, Indent = true, Async = true,
+            Encoding = Encoding.UTF8,
+            NewLineHandling = NewLineHandling.Entitize,
+            Indent = true,
+            Async = true,
         };
         return settings;
     }

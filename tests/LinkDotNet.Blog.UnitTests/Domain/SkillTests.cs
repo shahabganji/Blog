@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using LinkDotNet.Blog.Domain;
 
 namespace LinkDotNet.Blog.UnitTests.Domain;

@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using CommandLine;
 using LinkDotNet.Blog.CriticalCSS;
 using LinkDotNet.Blog.Domain;

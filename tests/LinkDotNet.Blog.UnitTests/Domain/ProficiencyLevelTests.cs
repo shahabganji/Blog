@@ -1,30 +1,29 @@
-﻿using System;
+using System;
 using LinkDotNet.Blog.Domain;
 
-namespace LinkDotNet.Blog.UnitTests.Domain
+namespace LinkDotNet.Blog.UnitTests.Domain;
+
+public class ProficiencyLevelTests
 {
-    public class ProficiencyLevelTests
+    [Theory]
+    [InlineData("Familiar")]
+    [InlineData("Proficient")]
+    [InlineData("Expert")]
+    public void ShouldCreateValidLevels(string key)
     {
-        [Theory]
-        [InlineData("Familiar")]
-        [InlineData("Proficient")]
-        [InlineData("Expert")]
-        public void ShouldCreateValidLevels(string key)
-        {
-            var level = ProficiencyLevel.Create(key);
+        var level = ProficiencyLevel.Create(key);
 
-            level.ShouldNotBeNull();
-        }
+        level.ShouldNotBeNull();
+    }
 
-        [Theory]
-        [InlineData("NotALevel")]
-        [InlineData("")]
-        [InlineData(null!)]
-        public void ShouldNotCreateInvalidLevels(string? key)
-        {
-            Action act = () => ProficiencyLevel.Create(key!);
+    [Theory]
+    [InlineData("NotALevel")]
+    [InlineData("")]
+    [InlineData(null!)]
+    public void ShouldNotCreateInvalidLevels(string? key)
+    {
+        Action act = () => ProficiencyLevel.Create(key!);
 
-            act.ShouldThrow<Exception>();
-        }
+        act.ShouldThrow<Exception>();
     }
 }

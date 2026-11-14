@@ -25,7 +25,7 @@ public class BookmarkServiceTests
             .Returns(x => ["1", "2", "3"]);
 
         var ids = await bookmarkService.GetBookmarkedPostIds();
-        
+
         ids.ShouldBe(["1", "2", "3"]);
         ids.ShouldBeUnique();
     }
@@ -36,9 +36,9 @@ public class BookmarkServiceTests
         localStorageService
             .GetItemAsync<IReadOnlyList<string>>("bookmarks")
             .Returns(x => []);
-        
+
         var ids = await bookmarkService.GetBookmarkedPostIds();
-        
+
         ids.ShouldBeEmpty();
     }
 
@@ -50,7 +50,7 @@ public class BookmarkServiceTests
             .Returns(x => ["1", "2", "3"]);
 
         var isBookmarked = await bookmarkService.IsBookmarked("1");
-        
+
         isBookmarked.ShouldBeTrue();
     }
 
@@ -62,7 +62,7 @@ public class BookmarkServiceTests
             .Returns(x => ["1", "2", "3"]);
 
         var isBookmarked = await bookmarkService.IsBookmarked("4");
-        
+
         isBookmarked.ShouldBeFalse();
     }
 

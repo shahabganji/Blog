@@ -121,7 +121,7 @@ public class NavMenuTests : BunitContext
 
         var profileInfoConfig = Options.Create(new ProfileInformationBuilder().Build());
         Services.AddScoped(_ => profileInfoConfig);
-        
+
         AddAuthorization();
 
         var cut = Render<NavMenu>();
@@ -131,7 +131,7 @@ public class NavMenuTests : BunitContext
         image.ShouldNotBeNull();
         image.TextContent.ShouldBe("Steven");
     }
-    
+
     private class ThemeTogglerStub : ComponentBase
     {
         [Parameter]

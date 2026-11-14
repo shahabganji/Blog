@@ -1,4 +1,4 @@
-﻿using LinkDotNet.Enumeration;
+using LinkDotNet.Enumeration;
 
 namespace LinkDotNet.Blog.Domain;
 

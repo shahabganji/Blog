@@ -12,13 +12,13 @@ namespace LinkDotNet.Blog.IntegrationTests.Web.Features;
 public class SimilarBlogPostJobTests : SqlDatabaseTestBase<BlogPost>
 {
     private readonly Repository<SimilarBlogPost> similarBlogPostRepository;
-    
+
     public SimilarBlogPostJobTests()
     {
-        similarBlogPostRepository = 
+        similarBlogPostRepository =
             new Repository<SimilarBlogPost>(DbContextFactory, Substitute.For<ILogger<Repository<SimilarBlogPost>>>());
     }
-    
+
     [Fact]
     public async Task ShouldCalculateSimilarBlogPosts()
     {
@@ -28,16 +28,16 @@ public class SimilarBlogPostJobTests : SqlDatabaseTestBase<BlogPost>
         await Repository.StoreAsync(blogPost1);
         await Repository.StoreAsync(blogPost2);
         await Repository.StoreAsync(blogPost3);
-        
+
         var job = new SimilarBlogPostJob(Repository, similarBlogPostRepository);
         var context = Substitute.For<IJobExecutionContext>();
         context.Parameter.Returns(true);
         await job.RunAsync(context, CancellationToken.None);
-        
+
         var similarBlogPosts = await similarBlogPostRepository.GetAllAsync();
         similarBlogPosts.Count.ShouldBe(3);
     }
-    
+
     [Fact]
     public async Task ShouldNotCalculateWhenNotTriggeredAsInstantJob()
     {
@@ -47,10 +47,10 @@ public class SimilarBlogPostJobTests : SqlDatabaseTestBase<BlogPost>
         await Repository.StoreAsync(blogPost1);
         await Repository.StoreAsync(blogPost2);
         await Repository.StoreAsync(blogPost3);
-        
+
         var job = new SimilarBlogPostJob(Repository, similarBlogPostRepository);
         await job.RunAsync(Substitute.For<IJobExecutionContext>(), CancellationToken.None);
-        
+
         var similarBlogPosts = await similarBlogPostRepository.GetAllAsync();
         similarBlogPosts.ShouldBeEmpty();
     }

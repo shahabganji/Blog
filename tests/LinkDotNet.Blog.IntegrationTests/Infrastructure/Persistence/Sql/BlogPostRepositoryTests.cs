@@ -171,7 +171,7 @@ public sealed class BlogPostRepositoryTests : SqlDatabaseTestBase<BlogPost>
 
         (await DbContext.BlogPosts.AsNoTracking().AnyAsync(b => b.Id == blogPost.Id, TestContext.Current.CancellationToken)).ShouldBeFalse();
     }
-    
+
     [Fact]
     public async Task GivenBlogPostWithTags_WhenLoadingAndDeleting_ThenShouldBeUpdated()
     {

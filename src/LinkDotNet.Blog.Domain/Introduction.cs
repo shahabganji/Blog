@@ -1,4 +1,4 @@
-﻿namespace LinkDotNet.Blog.Domain;
+namespace LinkDotNet.Blog.Domain;
 
 public sealed record Introduction
 {

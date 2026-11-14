@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using AngleSharp.Html.Dom;
 using Blazored.Toast.Services;
 using LinkDotNet.Blog.Domain;
@@ -26,14 +26,14 @@ public class BlogPostAdminActionsTests : BunitContext
         AddAuthorization().SetAuthorized("s");
         nativeDialog = JSInterop.SetupNativeDialog();
     }
-    
+
     [Fact]
     public async Task ShouldDeleteBlogPostWhenOkClicked()
     {
         const string blogPostId = "2";
         var repositoryMock = Substitute.For<IRepository<BlogPost>>();
         Services.AddSingleton(repositoryMock);
-        
+
         var cut = Render<BlogPostAdminActions>(s => s.Add(p => p.BlogPostId, blogPostId));
         await cut.Find("#delete-blogpost").ClickAsync();
 
@@ -69,7 +69,7 @@ public class BlogPostAdminActionsTests : BunitContext
     {
         const string blogPostId = "2";
         var repositoryMock = Substitute.For<IRepository<BlogPost>>();
-        
+
         Services.AddSingleton(repositoryMock);
         var cut = Render<BlogPostAdminActions>(s => s.Add(p => p.BlogPostId, blogPostId));
         await cut.Find("#delete-blogpost").ClickAsync();
@@ -83,7 +83,7 @@ public class BlogPostAdminActionsTests : BunitContext
     public void ShouldGoToEditPageForEdit()
     {
         const string blogPostId = "2";
-        
+
         var cut = Render<BlogPostAdminActions>(s => s.Add(p => p.BlogPostId, blogPostId));
 
         var anchor = cut.Find("#edit-blogpost") as IHtmlAnchorElement;
