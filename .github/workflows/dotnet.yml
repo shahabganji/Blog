@@ -18,8 +18,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  format:
+  # One job, so .NET is installed and packages restored once for format, build and test. Steps run in order and stop at
+  # the first failure, so the build only runs once the formatting check has passed.
+  build:
+    # Same OS and architecture as the App Service the blog runs on (Linux, x64).
     runs-on: ubuntu-latest
+
     steps:
     - uses: actions/checkout@v7
     - name: Setup .NET
@@ -28,6 +32,12 @@ jobs:
         dotnet-quality: preview
         dotnet-version: |
           11.0.x
+    - name: Cache NuGet packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj', 'global.json') }}
+        restore-keys: nuget-${{ runner.os }}-
     - name: Restore dependencies
       run: dotnet restore
     # Analyzer rules are enforced by the Release build (warnings are errors there), so only whitespace and style are checked here.
@@ -40,23 +50,6 @@ jobs:
           echo "::error::Formatting is off. Run 'dotnet format whitespace && dotnet format style' and commit the result."
         fi
         exit "$status"
-
-  build:
-    # Only build once the formatting check has passed.
-    needs: format
-    # Same OS and architecture as the App Service the blog runs on (Linux, x64).
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
-      with:
-        dotnet-quality: preview
-        dotnet-version: |
-          11.0.x
-    - name: Restore dependencies
-      run: dotnet restore
     - name: Build
       run: dotnet build --no-restore -c Release
     - name: Test
