@@ -12,7 +12,7 @@ public class TableOfContentsTests : BunitContext
                                ## Subheader 1.1
                                # Header 2
                                """;
-        
+
         var cut = Render<TableOfContents>(p => p
             .Add(x => x.Content, content)
             .Add(x => x.CurrentUri, "https://localhost"));
@@ -32,7 +32,7 @@ public class TableOfContentsTests : BunitContext
         thirdLink.GetAttribute("href").ShouldBe("https://localhost#header-2");
         thirdLink.ClassList.ShouldContain("ps-1");
     }
-    
+
     [Fact]
     public void ShouldSetAnchorLinkCorrectWhenAlreadyAnchorInUrl()
     {
@@ -44,13 +44,13 @@ public class TableOfContentsTests : BunitContext
         var cut = Render<TableOfContents>(p => p
             .Add(x => x.Content, content)
             .Add(x => x.CurrentUri, "https://localhost#header-1"));
-        
+
         var links = cut.FindAll("nav a");
         links.Count.ShouldBe(2);
         links[0].GetAttribute("href").ShouldBe("https://localhost#header-1");
         links[1].GetAttribute("href").ShouldBe("https://localhost#header-2");
     }
-    
+
     [Theory]
     [InlineData("# This is `Header` 1", "This is Header 1")]
     [InlineData("# [This is a link](https://link.com)", "This is a link")]
@@ -62,7 +62,7 @@ public class TableOfContentsTests : BunitContext
         var cut = Render<TableOfContents>(p => p
             .Add(x => x.Content, markdown)
             .Add(x => x.CurrentUri, "https://localhost"));
-        
+
         var link = cut.Find("nav a");
         link.TextContent.ShouldBe(expectedToc);
     }
@@ -73,7 +73,7 @@ public class TableOfContentsTests : BunitContext
         var cut = Render<TableOfContents>(p => p
             .Add(x => x.Content, string.Empty)
             .Add(x => x.CurrentUri, "https://localhost"));
-        
+
         cut.Markup.ShouldBeEmpty();
     }
 }

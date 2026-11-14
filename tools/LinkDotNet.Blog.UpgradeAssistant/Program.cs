@@ -1,4 +1,4 @@
-﻿using CommandLine;
+using CommandLine;
 using LinkDotNet.Blog.UpgradeAssistant;
 using Spectre.Console;
 

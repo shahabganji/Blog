@@ -17,7 +17,7 @@ public class UploadFileModalDialogTests : BunitContext
         var cut = Render<UploadFileModalDialog>();
         var task = cut.InvokeAsync(() => cut.Instance.ShowAsync("Filename.png"));
         cut.Find("#cache").Change(false);
-        
+
         await cut.Find("form").SubmitAsync();
 
         var result = await task;
@@ -25,13 +25,13 @@ public class UploadFileModalDialogTests : BunitContext
         result.Name.ShouldBe("Filename.png");
         result.CacheMedia.ShouldBeFalse();
     }
-    
+
     [Fact]
     public async Task ShouldReturnNullWhenAborted()
     {
         var cut = Render<UploadFileModalDialog>();
         var task = cut.InvokeAsync(() => cut.Instance.ShowAsync("Filename.png"));
-        
+
         await cut.Find("#abort").ClickAsync();
 
         var result = await task;

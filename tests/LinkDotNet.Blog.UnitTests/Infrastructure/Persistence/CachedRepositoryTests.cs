@@ -59,10 +59,10 @@ public sealed class CachedRepositoryTests
             30);
 
         await repositoryMock.Received(6).GetAllAsync(
-                Arg.Any<Expression<Func<BlogPost, bool>>>(), 
-                Arg.Any<Expression<Func<BlogPost, object>>>(), 
-                Arg.Any<bool>(), 
-                Arg.Any<int>(), 
+                Arg.Any<Expression<Func<BlogPost, bool>>>(),
+                Arg.Any<Expression<Func<BlogPost, object>>>(),
+                Arg.Any<bool>(),
+                Arg.Any<int>(),
                 Arg.Any<int>());
     }
 
@@ -101,13 +101,13 @@ public sealed class CachedRepositoryTests
         await sut.GetAllAsync();
 
         await repositoryMock.Received(2).GetAllAsync(
-                Arg.Any<Expression<Func<BlogPost, bool>>>(), 
-                Arg.Any<Expression<Func<BlogPost, object>>>(), 
-                Arg.Any<bool>(), 
-                Arg.Any<int>(), 
+                Arg.Any<Expression<Func<BlogPost, bool>>>(),
+                Arg.Any<Expression<Func<BlogPost, object>>>(),
+                Arg.Any<bool>(),
+                Arg.Any<int>(),
                 Arg.Any<int>());
     }
-    
+
     [Theory]
     [InlineData(null!)]
     [InlineData("some_id")]
@@ -115,17 +115,17 @@ public sealed class CachedRepositoryTests
     {
         var blogPost = new BlogPostBuilder().Build();
         blogPost.Id = id!;
-        
+
         await sut.StoreAsync(blogPost);
-        
+
         await repositoryMock.Received(1).StoreAsync(blogPost);
     }
-    
+
     [Fact]
     public async Task ShouldNotThrowExceptionWhenCallingDeleteWithoutRetrievingKeyFirst()
     {
         await sut.DeleteAsync("some_id");
-        
+
         await repositoryMock.Received(1).DeleteAsync("some_id");
     }
 

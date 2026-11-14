@@ -42,7 +42,7 @@ public sealed class MigrationManagerTests : IDisposable
         content.ShouldContain("\"EnableBrokenLinkChecker\": true");
         content.ShouldContain("\"ShowCodeBlockLanguage\": true");
         content.ShouldContain("\"EnableMarkdownForLlms\": false");
-        
+
         // Verify backup was created
         var backupFiles = Directory.GetFiles(backupDir);
         backupFiles.ShouldNotBeEmpty();
@@ -214,7 +214,7 @@ public sealed class MigrationManagerTests : IDisposable
         result.ShouldBeTrue();
         var content = await File.ReadAllTextAsync(testFile, TestContext.Current.CancellationToken);
         content.ShouldBe(json); // Should not change in dry-run mode
-        
+
         // Verify no backup was created in dry-run mode
         Directory.Exists(backupDir).ShouldBeFalse();
     }

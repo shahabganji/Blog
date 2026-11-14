@@ -39,7 +39,7 @@ public sealed class BlogPostPublisherTests : SqlDatabaseTestBase<BlogPost>
         (await Repository.GetByIdAsync(bp2.Id))!.IsPublished.ShouldBeTrue();
         (await Repository.GetByIdAsync(bp3.Id))!.IsPublished.ShouldBeFalse();
     }
-    
+
     [Fact]
     public async Task ShouldInvalidateCacheWhenPublishing()
     {
@@ -51,7 +51,7 @@ public sealed class BlogPostPublisherTests : SqlDatabaseTestBase<BlogPost>
 
         await cacheInvalidator.Received().ClearCacheAsync();
     }
-    
+
     [Fact]
     public async Task ShouldNotInvalidateCacheWhenThereIsNothingToPublish()
     {

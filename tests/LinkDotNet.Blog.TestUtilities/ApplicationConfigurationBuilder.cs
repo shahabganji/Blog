@@ -74,7 +74,7 @@ public class ApplicationConfigurationBuilder
         this.showReadingIndicator = showReadingIndicator;
         return this;
     }
-    
+
     public ApplicationConfigurationBuilder WithShowSimilarPosts(bool showSimilarPosts)
     {
         this.showSimilarPosts = showSimilarPosts;
@@ -86,7 +86,7 @@ public class ApplicationConfigurationBuilder
         this.showBuildInformation = showBuildInformation;
         return this;
     }
-    
+
     public ApplicationConfigurationBuilder WithBlogBrandUrl(string? blogBrandUrl)
     {
         this.blogBrandUrl = blogBrandUrl;

@@ -27,15 +27,15 @@ public class BookmarksTests : SqlDatabaseTestBase<BlogPost>
 
         // Act
         var cut = ctx.Render<Blog.Web.Features.Bookmarks.Bookmarks>();
-        
+
         // Assert
         cut.WaitForElement(".blog-card");
         var blogPosts = cut.FindComponents<ShortBlogPost>();
-        
+
         blogPosts.ShouldHaveSingleItem();
         blogPosts[0].Find(".description h4").TextContent.ShouldBe("Bookmarked Post");
     }
-    
+
     [Fact]
     public async Task ShouldRemoveBookmarkWhenButtonIsClicked()
     {
@@ -48,19 +48,19 @@ public class BookmarksTests : SqlDatabaseTestBase<BlogPost>
         bookmarkService.IsBookmarked(bookmarkedBlogPost.Id).Returns(true);
         ctx.Services.AddScoped(_ => Repository);
         ctx.Services.AddScoped(_ => bookmarkService);
-        
+
         // Act
         var cut = ctx.Render<Blog.Web.Features.Bookmarks.Bookmarks>();
         cut.WaitForElement(".blog-card");
-        
+
         // Find and click the bookmark button
         var bookmarkButton = cut.FindComponent<BookmarkButton>().Find("button");
         await bookmarkButton.ClickAsync();
-        
+
         // Assert
         await bookmarkService.Received(1).SetBookmark(bookmarkedBlogPost.Id, false);
     }
-    
+
     [Fact]
     public void ShouldDisplayMessageWhenNoBookmarksExist()
     {
@@ -70,10 +70,10 @@ public class BookmarksTests : SqlDatabaseTestBase<BlogPost>
         bookmarkService.GetBookmarkedPostIds().Returns(new List<string>());
         ctx.Services.AddScoped(_ => Repository);
         ctx.Services.AddScoped(_ => bookmarkService);
-        
+
         // Act
         var cut = ctx.Render<Blog.Web.Features.Bookmarks.Bookmarks>();
-        
+
         // Assert
         cut.WaitForElement("h4");
         cut.Find("h4").TextContent.ShouldBe("No bookmarks yet!");

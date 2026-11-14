@@ -37,7 +37,7 @@ public class SimilarBlogPostJob : IJob
         var blogPosts = await blogPostRepository.GetAllByProjectionAsync(
             bp => new BlogPostSimilarity(bp.Id, bp.Title, bp.Tags, bp.ShortDescription),
             f => f.IsPublished);
-        var documents = blogPosts.Select(bp => TextProcessor.TokenizeAndNormalize([bp.Title, bp.ShortDescription, ..bp.Tags])).ToList();
+        var documents = blogPosts.Select(bp => TextProcessor.TokenizeAndNormalize([bp.Title, bp.ShortDescription, .. bp.Tags])).ToList();
 
         var similarities = blogPosts.Select(bp => GetSimilarityForBlogPost(bp, documents, blogPosts)).ToArray();
         var ids = await similarBlogPostRepository.GetAllByProjectionAsync(s => s.Id);
@@ -51,7 +51,7 @@ public class SimilarBlogPostJob : IJob
         List<IReadOnlyCollection<string>> documents,
         IReadOnlyCollection<BlogPostSimilarity> blogPosts)
     {
-        var target = TextProcessor.TokenizeAndNormalize([blogPost.Title, blogPost.ShortDescription, ..blogPost.Tags]);
+        var target = TextProcessor.TokenizeAndNormalize([blogPost.Title, blogPost.ShortDescription, .. blogPost.Tags]);
 
         var vectorizer = new TfIdfVectorizer(documents);
         var targetVector = vectorizer.ComputeTfIdfVector(target);

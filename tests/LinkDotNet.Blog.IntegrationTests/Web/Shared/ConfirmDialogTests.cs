@@ -1,4 +1,4 @@
-﻿using LinkDotNet.Blog.Web.Features.Components;
+using LinkDotNet.Blog.Web.Features.Components;
 using LinkDotNet.Blog.TestUtilities;
 
 namespace LinkDotNet.Blog.IntegrationTests.Web.Shared;

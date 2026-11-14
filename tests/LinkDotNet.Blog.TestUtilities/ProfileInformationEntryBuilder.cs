@@ -1,4 +1,4 @@
-﻿using LinkDotNet.Blog.Domain;
+using LinkDotNet.Blog.Domain;
 
 namespace LinkDotNet.Blog.TestUtilities;
 
