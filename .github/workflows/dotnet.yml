@@ -39,12 +39,8 @@ jobs:
         exit "$status"
 
   build:
-
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm, macos-latest ]
+    # Same OS and architecture as the App Service the blog runs on (Linux, x64).
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v7
