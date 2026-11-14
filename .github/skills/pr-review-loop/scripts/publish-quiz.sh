@@ -18,6 +18,9 @@ OUT="${OUT_DIR:-${TMPDIR:-/tmp}}"
 WORKFLOW="pr-quiz-publish.yml"
 
 read -r HEAD URL < <(gh api "repos/$REPO/pulls/$PR" --jq '"\(.head.sha) \(.html_url)"')
+# Render the local preview with the same solo-mode setting the workflows use.
+ALLOW_AUTHOR="$(gh variable get PR_QUIZ_ALLOW_AUTHOR --repo "$REPO" 2>/dev/null || true)"
+export ALLOW_AUTHOR
 PAYLOAD="$("$QUIZ" build "$SPEC" "$PR" "$HEAD" "$URL" "$OUT")"
 echo "HTML summary:          $OUT/pr-$PR-summary.html"
 echo "Check summary preview: $OUT/pr-$PR-quiz.md"
