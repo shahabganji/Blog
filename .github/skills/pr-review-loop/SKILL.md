@@ -1,6 +1,6 @@
 ---
 name: pr-review-loop
-description: Drive a pull request to "ready to merge" in a loop. Wait for the Copilot and Gitar reviews, fix or answer every review comment, resolve threads, keep checks green, then publish an intent-focused summary (on the pr-quiz check + HTML) with a short comprehension quiz that a requested reviewer must pass through a GitHub Actions form. Use when asked to create a PR and see it through review, to address bot review comments on a PR, or to publish a PR summary/quiz.
+description: Drive a pull request to "ready to merge" in a loop. Wait for the Copilot and Gitar reviews, fix or answer every review comment, resolve threads, keep checks green, then publish an intent-focused summary (on the pr-quiz check + HTML) with a short comprehension quiz, posted as a PR comment with checkboxes, that a requested reviewer must pass. Use when asked to create a PR and see it through review, to address bot review comments on a PR, or to publish a PR summary/quiz.
 ---
 
 # PR review loop
@@ -62,7 +62,7 @@ Rules:
 
 - Never merge, close, force-push, rewrite published history, or bypass rulesets.
 - Never weaken a gate to make it pass: no edits to `.github/workflows/pr-quiz.yml`, `.github/workflows/pr-quiz-publish.yml`, `.github/workflows/copilot-review-gate.yml`, `.github/pr-quiz/**` or rulesets unless that is the PR's explicit purpose and the user asked for it.
-- Never answer the quiz, and never write the answers anywhere except the private `quiz.json` in the session workspace. Only a human reviewer requested on the PR may answer it. Never run the "PR quiz: answer" workflow, and never request a reviewer yourself just to get the quiz answered; ask the user who should review.
+- Never answer the quiz, and never write the answers anywhere except the private `quiz.json` in the session workspace. Only a human reviewer requested on the PR may answer it. Never tick boxes in the quiz comment, never run the "PR quiz: answer" workflow, and never request a reviewer yourself just to get the quiz answered; ask the user who should review.
 - Never commit secrets, `appsettings.*` files with real values, or the private quiz spec.
 - Never disable or skip tests or checks to get to green.
 
@@ -105,4 +105,4 @@ End with a short report:
 - the number of review rounds;
 - the threads fixed, refuted or escalated, with links;
 - the path to the HTML summary;
-- that the PR now waits for a requested human reviewer to pass the quiz (`pr-quiz` check → Actions → "PR quiz: answer" → Run workflow) and to merge it. If no human reviewer is requested, say so: the PR author can't answer their own quiz.
+- that the PR now waits for a requested human reviewer to pass the quiz (tick one box per question in the PR quiz comment, then tick Submit) and to merge it. If no human reviewer is requested, say so: the PR author can't answer their own quiz, unless solo mode is on (repository variable `PR_QUIZ_ALLOW_AUTHOR=true`) and the author is a repository admin.
