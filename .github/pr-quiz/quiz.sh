@@ -136,11 +136,16 @@ write_comment() { # $1 body: update the quiz comment on the PR, or create it
   fi
 }
 
-write_form() { # $1 public spec file, $2 state JSON, $3 notice, $4 correct letters to mark once passed: render the quiz comment
-  local open body
+write_form() { # $1 public spec file, $2 state JSON, $3 notice: render the quiz comment, with every box cleared
+  local open body answers=""
   # Open until someone passes: a reviewer requested later gets their own attempts, and grading enforces each person's limit.
   open="$(jq -n --argjson s "$2" '$s.results | any(.passed) | not')"
-  if ! body="$(jq -c --argjson open "$open" --arg notice "$3" --arg answers "${4:-}" \
+  if [[ "$open" == "false" && -f "$tmp/payload.json" ]]; then # passed: every redraw marks the correct answers
+    (umask 077 && printf '%s\n' "${PR_QUIZ_PRIVATE_KEY:-}" >"$tmp/key.pem")
+    answers="$(answer_key "$tmp/payload.json" "$tmp/key.pem")" || answers=""
+    rm -f "$tmp/key.pem"
+  fi
+  if ! body="$(jq -c --argjson open "$open" --arg notice "$3" --arg answers "$answers" \
       '. + {form: {open: $open, notice: $notice, answers: (if $open then "" else $answers end)}}' "$1" \
       | jq -r -L "$DIR" -f "$DIR/render-comment.jq")" || ! write_comment "$body"; then
     note "⚠️ The quiz comment on PR #$PR could not be updated; the \`$CHECK_NAME\` check is up to date."
@@ -320,7 +325,7 @@ read_answers() { # $1 question count -> sets given_id (quiz ID) and selected (JS
 }
 
 cmd_answer() {
-  local check payload state errors id n given result attempts passed who given_id selected bad answers
+  local check payload state errors id n given result attempts passed who given_id selected bad
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   COMMENT_ID="$(jq -r '.comment.id // empty' "${GITHUB_EVENT_PATH:?}")"
@@ -344,12 +349,7 @@ cmd_answer() {
     refuse "⚠️ @$ACTOR, only $who can answer the quiz on PR #$PR, never bots or agents. Ask the author to request your review, then answer again. This did not count as an attempt."
   fi
   if jq -e '.results | any(.passed)' <<<"$state" >/dev/null; then
-    if [[ -n "$COMMENT_ID" ]]; then
-      (umask 077 && printf '%s\n' "${PR_QUIZ_PRIVATE_KEY:-}" >"$tmp/key.pem")
-      answers="$(answer_key "$tmp/payload.json" "$tmp/key.pem")" || answers=""
-      rm -f "$tmp/key.pem"
-      write_form "$tmp/public.json" "$state" "✅ This quiz has already been passed." "$answers"
-    fi
+    if [[ -n "$COMMENT_ID" ]]; then write_form "$tmp/public.json" "$state" "✅ This quiz has already been passed."; fi
     note "✅ The quiz on PR #$PR has already been passed."; return 0
   fi
   if [[ "$given_id" != "$id" ]]; then
@@ -376,15 +376,13 @@ cmd_answer() {
       "$(jq -r '.output.text' <<<"$check")" "$(jq -r .details_url <<<"$state")"
     stop "❌ This quiz can't be graded: its answer key could not be decrypted. Ask the author to publish a new quiz. This did not count as an attempt."
   fi
-  passed="$(jq -r .passed <<<"$result")"
-  answers=""
-  if [[ "$passed" == "true" ]]; then answers="$(answer_key "$tmp/payload.json" "$tmp/key.pem")" || answers=""; fi
   rm -f "$tmp/key.pem"
+  passed="$(jq -r .passed <<<"$result")"
   state="$(jq -c --arg l "$ACTOR" --argjson p "$passed" '.results += [{by: $l, passed: $p}]' <<<"$state")"
   update_check "$tmp/public.json" "$state" "$payload"
   echo "PR #$PR quiz $(jq -r .quiz <<<"$state") at $head: reviewers=$reviewers results=$(jq -c .results <<<"$state")"
   if [[ "$passed" == "true" ]]; then
-    write_form "$tmp/public.json" "$state" "✅ @$ACTOR passed the quiz. The \`$CHECK_NAME\` check is green." "$answers"
+    write_form "$tmp/public.json" "$state" "✅ @$ACTOR passed the quiz. The \`$CHECK_NAME\` check is green."
     note "✅ @$ACTOR passed the quiz on PR #$PR ($(jq -r .score <<<"$result")%). The \`$CHECK_NAME\` check is green."
   else
     # Only pass/fail is reported, and the boxes are cleared: a per-attempt score or per-question result would tell the
