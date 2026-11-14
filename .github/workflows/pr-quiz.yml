@@ -1,4 +1,5 @@
-# Comprehension quiz gate for PRs into shahab: the answer form.
+# Comprehension quiz gate for PRs into shahab: the answer form. Answering in the quiz comment on the PR (pr-quiz-comment.yml)
+# is usually easier; this form is the fallback and follows the same rules.
 #
 # 1. The pr-review-loop skill publishes a summary and quiz with pr-quiz-publish.yml. It appears on the PR's pr-quiz check.
 # 2. A requested reviewer (not the PR author unless PR_QUIZ_ALLOW_AUTHOR is true, never a bot) opens this workflow in the Actions tab, clicks "Run workflow", enters
@@ -60,8 +61,8 @@ jobs:
     permissions:
       contents: read
       checks: write
-      pull-requests: read
-    # Shared with pr-quiz-publish.yml, so the check is never updated by two runs at once.
+      pull-requests: write # the quiz comment
+    # Shared with the other quiz workflows, so the check is never updated by two runs at once.
     concurrency:
       group: pr-quiz-${{ inputs.pr }}
       cancel-in-progress: false

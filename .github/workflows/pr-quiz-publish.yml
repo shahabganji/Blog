@@ -3,8 +3,8 @@
 # Dispatched by .github/skills/pr-review-loop/scripts/publish-quiz.sh with the payload printed by "quiz.sh build": the summary,
 # the questions and the answer key encrypted with public.pem. "quiz.sh publish" checks that the payload is valid, belongs to the
 # PR's current head commit and decrypts with the private key, then sets the pr-quiz check to pending with the summary and quiz
-# as its Markdown. The HTML version is attached to this run. Publishing again replaces the quiz and resets the attempts.
-# Reviewers answer with pr-quiz.yml. See .github/pr-quiz/README.md.
+# as its Markdown, and posts (or rewrites) the quiz comment on the PR. The HTML version is attached to this run. Publishing
+# again replaces the quiz and resets the attempts. Reviewers answer in the comment (pr-quiz-comment.yml) or with pr-quiz.yml. See .github/pr-quiz/README.md.
 name: "PR quiz: publish"
 run-name: "PR quiz: publish for PR #${{ inputs.pr }}"
 
@@ -30,7 +30,7 @@ jobs:
     permissions:
       contents: read
       checks: write
-      pull-requests: read
+      pull-requests: write # the quiz comment
     concurrency:
       group: pr-quiz-${{ inputs.pr }}
       cancel-in-progress: false

@@ -1,0 +1,53 @@
+# Comprehension quiz gate for PRs into shahab: answering in the quiz comment on the PR.
+#
+# pr-quiz-publish.yml posts the summary and the questions as a comment with one checkbox per option and a "Submit my answers"
+# box. Ticking a box edits the comment, which triggers this workflow; it only runs once Submit is ticked. "quiz.sh answer"
+# then grades the ticked boxes as the person who made that edit (github.event.sender, which GitHub sets), with the same rules
+# as the Actions form in pr-quiz.yml, updates the pr-quiz check and rewrites the comment with the result.
+#
+# Every comment edit in the repository starts a run of this workflow, but the job is skipped unless it is the quiz comment
+# (written by github-actions[bot]) with Submit ticked. Edits made with GITHUB_TOKEN don't trigger workflows, so rewriting the
+# comment never loops. issue_comment runs use the workflow and scripts from the default branch, never from the PR, and the
+# comment body is only read from the event file. Only users with write access can tick boxes in someone else's comment.
+name: "PR quiz: answer in comment"
+run-name: "PR quiz: comment edited by @${{ github.event.sender.login }} on #${{ github.event.issue.number }}"
+
+on:
+  issue_comment:
+    types: [edited]
+
+permissions: {}
+
+jobs:
+  answer:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.user.login == 'github-actions[bot]' &&
+      startsWith(github.event.comment.body, '<!-- pr-quiz-form:v1 ') &&
+      contains(github.event.comment.body, '- [x] **Submit my answers**')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pr-quiz
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    # Shared with the other quiz workflows, so the check and the comment are never updated by two runs at once.
+    concurrency:
+      group: pr-quiz-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/pr-quiz
+          persist-credentials: false
+
+      - run: .github/pr-quiz/quiz.sh answer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.triggering_actor }}
+          ALLOW_AUTHOR: ${{ vars.PR_QUIZ_ALLOW_AUTHOR }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR_QUIZ_PRIVATE_KEY: ${{ secrets.PR_QUIZ_PRIVATE_KEY }}
