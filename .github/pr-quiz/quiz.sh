@@ -274,7 +274,7 @@ comment_editors() { # $1 comment node ID -> logins of everyone who edited the co
 }
 
 read_answers() { # $1 question count -> sets given_id (quiz ID) and selected (JSON: ticked letters per question) from the event
-  local ev="${GITHUB_EVENT_PATH:?}" form editors
+  local ev="${GITHUB_EVENT_PATH:?}" form editors current
   if [[ -n "${COMMENT_ID:-}" ]]; then
     # Only the quiz comment written by this workflow, on this PR, submitted by whoever made this edit (a re-run by someone
     # else would otherwise answer in the editor's name).
@@ -286,6 +286,13 @@ read_answers() { # $1 question count -> sets given_id (quiz ID) and selected (JS
     [[ "$(jq -r .ok <<<"$form")" == "true" ]] || { COMMENT_ID=""; stop "❌ That comment is not the quiz comment of PR #$PR."; }
     [[ "$(jq -r .sender <<<"$form")" == "$ACTOR" ]] || { COMMENT_ID=""; stop "❌ Only the person who ticked Submit can submit those answers."; }
     jq -e '.ticks | index("submit")' <<<"$form" >/dev/null || { COMMENT_ID=""; note "Submit is not ticked; nothing to grade."; exit 0; }
+    # Runs can wait in the per-PR queue: grade only if the comment is still exactly what this edit made it. Otherwise a later
+    # edit or rewrite has happened (the history below would describe the comment now, not this body), and any later edit
+    # with Submit ticked has its own run. Nothing is rewritten, so ticks being made now are kept.
+    current="$(gh api "repos/$REPO/issues/comments/$COMMENT_ID" --jq '.body')" || current=""
+    if [[ "$(tr -d '\r' <<<"$current")" != "$(jq -r '.comment.body // "" | gsub("\r"; "")' "$ev")" ]]; then
+      COMMENT_ID=""; note "The quiz comment changed after this edit, so this run doesn't grade it; a later submit is graded by its own run."; exit 0
+    fi
     # The event only has the comment's current text, not who ticked each box. So every edit since this workflow last
     # wrote the comment (which clears the boxes) must be the submitter's; otherwise someone could tick the answers for them.
     editors="$(comment_editors "$(jq -r '.comment.node_id // ""' "$ev")")" || editors="?"
